@@ -7,7 +7,7 @@
     <title>My Diller UZ - Admin Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
-    <link rel="stylesheet" href="../../assets/css/styles.css">
+    <link rel="stylesheet" href="../../assets/css/styles.css?v=12">
 </head>
 
 <body data-page="dashboard" data-role="admin" data-root="../..">
@@ -26,9 +26,7 @@
         <main id="main-content">
             <header id="topbar">
                 <div class="topbar-left">
-                    <button class="btn btn-outline btn-icon mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Menyu"><i class="ri-menu-2-line"></i></button>
                     <h2 id="page-title">Dashboard</h2>
-                    <div class="mobile-menu-dropdown" id="mobile-menu-dropdown"></div>
                 </div>
                 <div class="topbar-actions">
                     <div class="notification-wrapper">
@@ -46,6 +44,7 @@
                     <button class="btn btn-outline" onclick="doLogout()"><i class="ri-logout-box-r-line"></i> Chiqish</button>
                 </div>
             </header>
+            <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Asosiy menyu"></nav>
             <div id="view-area"></div>
         </main>
     </section>
@@ -63,7 +62,7 @@
 
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="../../assets/js/app.js?v=11"></script>
+    <script src="../../assets/js/app.js?v=12"></script>
 </body>
 
 </html>
