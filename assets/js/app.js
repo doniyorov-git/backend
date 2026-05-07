@@ -301,10 +301,9 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function contractNumber(contract) {
             const explicitNumber = String(contract?.contractNumber || contract?.contract_number || "").trim();
             if (explicitNumber) return explicitNumber;
-            const signedAtDigits = String(contract?.signedAt || contract?.created_at || "").replace(/\D/g, "");
-            if (signedAtDigits.length >= 14) return signedAtDigits.slice(0, 14);
-            const rawId = String(contract?.id || "").replace(/^ctr_?/i, "").replace(/[^\w-]/g, "").toUpperCase();
-            return rawId || "Aniqlanmagan";
+            const numericId = parseInt(String(contract?.id || "").replace(/\D/g, ""), 10);
+            if (Number.isFinite(numericId) && numericId > 0) return String(numericId).padStart(6, "0");
+            return "Aniqlanmagan";
         }
 
         function legalPartyName(name, defaultSuffix = "XK") {

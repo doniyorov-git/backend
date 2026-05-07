@@ -95,19 +95,20 @@ function appValue($value, $fallback = 'Kiritilmagan') {
 }
 
 function appGenerateContractNumber(PDO $pdo) {
-    $prefix = date('ymd');
+    // Keep contract numbers short and sequential (e.g. 000001, 000002, ...).
+    $stmt = $pdo->query("SELECT MAX(CAST(contract_number AS UNSIGNED)) FROM contract_signatures WHERE contract_number REGEXP '^[0-9]+$'");
+    $maxNumber = (int) $stmt->fetchColumn();
 
-    // Keep contract numbers compact while avoiding accidental duplicates.
-    for ($attempt = 0; $attempt < 5; $attempt++) {
-        $contractNumber = $prefix . sprintf('%04d', random_int(0, 9999));
-        $stmt = $pdo->prepare("SELECT 1 FROM contract_signatures WHERE contract_number = ? LIMIT 1");
-        $stmt->execute([$contractNumber]);
-        if (!$stmt->fetchColumn()) {
-            return $contractNumber;
+    for ($attempt = 0; $attempt < 10; $attempt++) {
+        $candidate = sprintf('%06d', $maxNumber + 1 + $attempt);
+        $check = $pdo->prepare("SELECT 1 FROM contract_signatures WHERE contract_number = ? LIMIT 1");
+        $check->execute([$candidate]);
+        if (!$check->fetchColumn()) {
+            return $candidate;
         }
     }
 
-    return date('ymdHis');
+    return sprintf('%06d', $maxNumber + 1 + random_int(1, 999));
 }
 
 function appFormatContractDate($value) {
@@ -463,15 +464,20 @@ function ensureAppSchema(PDO $pdo) {
             }
         }
 
+        // Renumber any contracts that still use the legacy long format
+        // (date-prefixed 10/16-digit numbers) into compact 6-digit sequential ids.
+        $pdo->exec("SET @row_number := (
+            SELECT COALESCE(MAX(CAST(contract_number AS UNSIGNED)), 0)
+            FROM contract_signatures
+            WHERE contract_number REGEXP '^[0-9]{1,6}$'
+        )");
         $pdo->exec("
             UPDATE contract_signatures
-            SET contract_number = CONCAT(
-                DATE_FORMAT(COALESCE(signed_at, created_at), '%y%m%d'),
-                LPAD(MOD(CRC32(id), 10000), 4, '0')
-            )
+            SET contract_number = LPAD(@row_number := @row_number + 1, 6, '0')
             WHERE contract_number IS NULL
                 OR contract_number = ''
-                OR contract_number REGEXP '^[0-9]{16}$'
+                OR contract_number REGEXP '^[0-9]{7,}$'
+            ORDER BY COALESCE(signed_at, created_at), id
         ");
     }
 
