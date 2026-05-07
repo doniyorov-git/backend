@@ -142,7 +142,23 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 const mapUser = u => ({ ...u, bankAccount: u.bank_account, bankMfo: u.mfo });
                 const mapProduct = p => ({ ...p, sellerId: p.seller_id, sellerName: p.seller_name, sellerPhone: p.seller_phone, moderationNote: p.moderation_note, moderatedAt: p.moderated_at, viewCount: p.view_count, createdAt: p.created_at });
                 const mapOrderItem = item => ({ ...item, prodId: item.product_id || item.prodId, qty: Number(item.quantity || item.qty || 0), price: Number(item.price || 0) });
-                const mapOrder = o => ({ ...o, buyerId: o.buyer_id, sellerId: o.seller_id, commStatus: o.comm_status, dispatchReport: o.dispatch_report, createdAt: o.created_at, updatedAt: o.updated_at, items: (o.items || []).map(mapOrderItem) });
+                const mapOrder = o => ({
+                    ...o,
+                    buyerId: o.buyer_id,
+                    sellerId: o.seller_id,
+                    sellerName: o.seller_name,
+                    sellerPhone: o.seller_phone,
+                    sellerInn: o.seller_inn,
+                    sellerBankAccount: o.seller_bank_account || o.bank_account,
+                    sellerBankMfo: o.seller_mfo || o.mfo,
+                    buyerName: o.buyer_name,
+                    buyerPhone: o.buyer_phone,
+                    commStatus: o.comm_status,
+                    dispatchReport: o.dispatch_report,
+                    createdAt: o.created_at,
+                    updatedAt: o.updated_at,
+                    items: (o.items || []).map(mapOrderItem)
+                });
                 const mapReport = r => ({ ...r, sellerId: r.seller_id, orderId: r.order_id, prodId: r.prod_id, dueDate: r.due_date, createdAt: r.created_at });
                 const mapTicket = t => ({ ...t, userId: t.user_id, createdAt: t.created_at });
                 const mapNotification = n => ({ ...n, isRead: Number(n.is_read) === 1, createdAt: n.created_at });
@@ -207,6 +223,30 @@ const STORAGE_KEY = "myDillerUzStateV2";
         const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
         const phoneDigits = value => String(value || "").replace(/\D/g, "").slice(0, 9);
         const fullPhone = value => "+998" + phoneDigits(value);
+
+        function formatDateTime(value) {
+            if (!value) return "";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return String(value);
+            return date.toLocaleString("uz-UZ", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+        }
+
+        function formatBankAccount(value) {
+            const digits = String(value || "").replace(/\D/g, "");
+            if (!digits) return "Kiritilmagan";
+            return digits.replace(/(.{4})/g, "$1 ").trim();
+        }
+
+        function orderSellerInfo(order) {
+            const seller = userById(order.sellerId);
+            return {
+                name: order.sellerName || seller.name || "Sotuvchi",
+                phone: order.sellerPhone || seller.phone || "",
+                inn: order.sellerInn || seller.inn || "",
+                bankAccount: order.sellerBankAccount || seller.bankAccount || "",
+                bankMfo: order.sellerBankMfo || seller.bankMfo || ""
+            };
+        }
 
         function formatPhoneInput(input) {
             const digits = phoneDigits(input.value);
@@ -583,7 +623,9 @@ Imzo: __
                 </button>
             `).join("");
             document.getElementById("sidebar-menu").innerHTML = html;
-            document.getElementById("mobile-menu-dropdown").innerHTML = mobileHtml;
+            const mobileMenu = document.getElementById("mobile-menu-dropdown");
+            mobileMenu.style.setProperty("--mobile-menu-count", menu.length);
+            mobileMenu.innerHTML = mobileHtml;
         }
 
         function toggleMobileMenu(force) {
@@ -612,14 +654,14 @@ Imzo: __
 
             dropdown.innerHTML = `
                 <div class="notification-head">
-                    <b>Bildirishnomalar</b>
+                    <span><i class="ri-notification-3-line"></i><b>Bildirishnomalar</b></span>
                     <button onclick="markAllNotificationsRead()">O'qildi</button>
                 </div>
                 <div class="notification-list">
                     ${DB.notifications.length ? DB.notifications.map(item => `
                         <button class="notification-item ${item.isRead ? "" : "unread"}" onclick="openNotification('${item.id}', '${escapeHtml(item.link || "")}')">
                             <i class="${notificationIcon(item.type)}"></i>
-                            <span><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.message)}</small></span>
+                            <span><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.message)}</small><time>${escapeHtml(formatDateTime(item.createdAt))}</time></span>
                         </button>
                     `).join("") : `<div class="notification-empty">Yangi bildirishnoma yo'q</div>`}
                 </div>`;
@@ -1249,7 +1291,7 @@ Imzo: __
                 <thead><tr><th>Buyurtma</th><th>Sotuvchi / Diler</th><th class="hide-sm">Sana</th><th>Summa</th><th>Holat</th><th>Amal</th></tr></thead>
                 <tbody>${orders.map(order => `<tr>
                     <td>#${order.id}</td>
-                    <td><b>${escapeHtml(userById(order.sellerId).name)}</b><div class="text-xs text-muted">${escapeHtml(userById(order.buyerId).name)}</div></td>
+                    <td><b>${escapeHtml(order.sellerName || userById(order.sellerId).name)}</b><div class="text-xs text-muted">${escapeHtml(order.buyerName || userById(order.buyerId).name)}</div></td>
                     <td class="hide-sm">${escapeHtml(order.date || order.createdAt || "")}</td>
                     <td class="font-bold text-primary">${money(order.total)}</td>
                     <td>${statusBadge(order.status)}</td>
@@ -1487,8 +1529,8 @@ Imzo: __
             const actions = orderActions(order);
             modal(`Buyurtma #${order.id}`, `
                 <div class="details-list mb-4">
-                    <div class="details-row"><span class="details-label">Sotuvchi:</span><span class="details-value">${escapeHtml(userById(order.sellerId).name)}</span></div>
-                    <div class="details-row"><span class="details-label">Diler:</span><span class="details-value">${escapeHtml(userById(order.buyerId).name)}</span></div>
+                    <div class="details-row"><span class="details-label">Sotuvchi:</span><span class="details-value">${escapeHtml(order.sellerName || userById(order.sellerId).name)}</span></div>
+                    <div class="details-row"><span class="details-label">Diler:</span><span class="details-value">${escapeHtml(order.buyerName || userById(order.buyerId).name)}</span></div>
                     <div class="details-row"><span class="details-label">Sana:</span><span class="details-value">${escapeHtml(order.date || order.createdAt || "")}</span></div>
                     <div class="details-row"><span class="details-label">Holat:</span><span class="details-value">${statusBadge(order.status)}</span></div>
                     <div class="details-row"><span class="details-label">Jami:</span><span class="details-value text-primary">${money(order.total)}</span></div>
@@ -1531,20 +1573,29 @@ Imzo: __
             let action = "";
             
             if (type === "seller") {
-                const seller = userById(order.sellerId);
+                const seller = orderSellerInfo(order);
                 title = "To'lov cheki (Sotuvchiga)";
-                body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
-                    <div style="font-size:3.5rem;color:var(--primary);margin-bottom:1rem;"><i class="ri-secure-payment-line"></i></div>
-                    <h3 class="mb-3">Sotuvchi rekvizitlari</h3>
-                    <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
-                        <div style="margin-bottom:.5rem;">Bank hisob raqami:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(seller.bankAccount || "Kiritilmagan")}</b></div>
-                        <div>MFO:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(seller.bankMfo || "Kiritilmagan")}</b></div>
+                body = `<div class="payment-card">
+                    <div class="payment-hero">
+                        <div class="payment-icon"><i class="ri-secure-payment-line"></i></div>
+                        <div>
+                            <div class="text-xs text-muted">Buyurtma #${escapeHtml(order.id)}</div>
+                            <h3>Sotuvchiga to'lov qilish</h3>
+                            <p>Quyidagi rekvizitlarga to'lovni amalga oshiring va tasdiqlang.</p>
+                        </div>
                     </div>
-                    <div class="mt-4 mb-2">
-                        <div class="text-sm text-muted">To'lanadigan summa:</div>
-                        <div class="font-bold text-primary" style="font-size:2rem;">${money(order.total)}</div>
+                    <div class="payment-amount">
+                        <span>To'lanadigan summa</span>
+                        <b>${money(order.total)}</b>
                     </div>
-                    <p class="text-xs text-muted mt-4">Iltimos, to'lovni yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
+                    <div class="payment-grid">
+                        <div class="payment-field wide"><span>Sotuvchi</span><b>${escapeHtml(seller.name)}</b></div>
+                        <div class="payment-field"><span>Telefon</span><b>${escapeHtml(seller.phone || "Kiritilmagan")}</b></div>
+                        <div class="payment-field"><span>INN / STIR</span><b>${escapeHtml(seller.inn || "Kiritilmagan")}</b></div>
+                        <div class="payment-field wide important"><span>Bank hisob raqami</span><b>${escapeHtml(formatBankAccount(seller.bankAccount))}</b></div>
+                        <div class="payment-field"><span>MFO</span><b>${escapeHtml(seller.bankMfo || "Kiritilmagan")}</b></div>
+                    </div>
+                    <div class="payment-note"><i class="ri-information-line"></i><span>To'lovdan so'ng “To'ladim” tugmasini bosing. Sotuvchi to'lovni ko'rib, buyurtma holatini yangilaydi.</span></div>
                 </div>`;
                 action = `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','buyer_paid')"><i class="ri-check-double-line"></i> To'ladim</button>`;
             } else if (type === "admin") {

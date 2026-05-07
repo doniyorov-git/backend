@@ -700,14 +700,15 @@
             position: absolute;
             top: calc(100% + 0.65rem);
             right: 0;
-            width: min(360px, calc(100vw - 2rem));
+            width: min(390px, calc(100vw - 2rem));
             display: none;
             border: 1px solid var(--border);
-            border-radius: 18px;
-            background: white;
-            box-shadow: var(--shadow);
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
             overflow: hidden;
             z-index: 40;
+            backdrop-filter: blur(16px);
         }
 
         .notification-dropdown.open {
@@ -715,11 +716,29 @@
         }
 
         .notification-head {
-            padding: 0.85rem 1rem;
+            padding: 1rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
             border-bottom: 1px solid var(--border);
+            background: linear-gradient(135deg, #f0fdfa, #ffffff);
+        }
+
+        .notification-head span {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .notification-head i {
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--primary);
+            color: white;
         }
 
         .notification-head button {
@@ -729,16 +748,16 @@
         }
 
         .notification-list {
-            max-height: 360px;
+            max-height: 380px;
             overflow-y: auto;
         }
 
         .notification-item {
             width: 100%;
-            padding: 0.9rem 1rem;
+            padding: 0.95rem 1rem;
             display: grid;
-            grid-template-columns: 34px minmax(0, 1fr);
-            gap: 0.7rem;
+            grid-template-columns: 38px minmax(0, 1fr);
+            gap: 0.75rem;
             text-align: left;
             border-bottom: 1px solid var(--border);
             color: var(--text);
@@ -750,8 +769,8 @@
         }
 
         .notification-item i {
-            width: 34px;
-            height: 34px;
+            width: 38px;
+            height: 38px;
             border-radius: 12px;
             display: inline-flex;
             align-items: center;
@@ -766,6 +785,14 @@
             margin-top: 0.2rem;
             color: var(--muted);
             line-height: 1.35;
+        }
+
+        .notification-item time {
+            display: block;
+            margin-top: 0.35rem;
+            color: #94a3b8;
+            font-size: 0.68rem;
+            font-weight: 700;
         }
 
         .notification-empty {
@@ -941,6 +968,123 @@
             background: rgba(255, 255, 255, 0.78);
         }
 
+        .payment-card {
+            padding: 1.35rem;
+            border: 1px solid #ccfbf1;
+            border-radius: 24px;
+            background: radial-gradient(circle at top right, rgba(20, 184, 166, 0.2), transparent 36%), linear-gradient(180deg, #ffffff, #f8fafc);
+            display: grid;
+            gap: 1rem;
+        }
+
+        .payment-hero {
+            display: grid;
+            grid-template-columns: 58px minmax(0, 1fr);
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .payment-icon {
+            width: 58px;
+            height: 58px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.75rem;
+            background: linear-gradient(135deg, var(--primary), #14b8a6);
+            box-shadow: 0 14px 28px rgba(13, 148, 136, 0.24);
+        }
+
+        .payment-hero h3 {
+            margin: 0.2rem 0;
+            font-size: 1.25rem;
+        }
+
+        .payment-hero p {
+            color: var(--muted);
+            line-height: 1.45;
+        }
+
+        .payment-amount {
+            padding: 1rem;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            background: linear-gradient(135deg, #0f766e, #14b8a6);
+            color: white;
+        }
+
+        .payment-amount span {
+            color: rgba(255, 255, 255, 0.82);
+            font-weight: 700;
+        }
+
+        .payment-amount b {
+            font-size: clamp(1.35rem, 4vw, 2rem);
+            text-align: right;
+        }
+
+        .payment-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.8rem;
+        }
+
+        .payment-field {
+            padding: 0.95rem;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.88);
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        .payment-field.wide {
+            grid-column: 1 / -1;
+        }
+
+        .payment-field.important {
+            border-color: #99f6e4;
+            background: #f0fdfa;
+        }
+
+        .payment-field span {
+            color: var(--muted);
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .payment-field b {
+            color: var(--text);
+            font-size: 1rem;
+            overflow-wrap: anywhere;
+        }
+
+        .payment-field.important b {
+            color: #0f766e;
+            font-size: clamp(1.05rem, 3.4vw, 1.45rem);
+            letter-spacing: 0.04em;
+        }
+
+        .payment-note {
+            padding: 0.85rem 1rem;
+            border-radius: 16px;
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 0.65rem;
+            align-items: start;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 0.84rem;
+            line-height: 1.45;
+        }
+
         .modal-overlay {
             position: fixed;
             inset: 0;
@@ -1086,27 +1230,39 @@
             .mobile-menu-dropdown {
                 position: fixed;
                 top: auto;
-                left: 0.75rem;
-                right: 0.75rem;
-                bottom: 0.75rem;
-                display: flex;
-                justify-content: space-around;
-                gap: 0.25rem;
+                left: 50%;
+                right: auto;
+                bottom: calc(0.75rem + env(safe-area-inset-bottom));
+                width: min(calc(100vw - 1.5rem), 760px);
+                transform: translateX(-50%);
+                display: grid;
+                grid-template-columns: repeat(var(--mobile-menu-count), minmax(48px, 1fr));
+                justify-content: start;
+                gap: 0.35rem;
                 padding: 0.45rem;
-                border-radius: 24px;
-                box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+                border-radius: 26px;
+                box-shadow: 0 18px 48px rgba(15, 23, 42, 0.2);
+                background: rgba(255, 255, 255, 0.94);
+                backdrop-filter: blur(18px);
+                overflow-x: auto;
+                scrollbar-width: none;
             }
 
             .mobile-menu-dropdown.open {
-                display: flex;
+                display: grid;
+            }
+
+            .mobile-menu-dropdown::-webkit-scrollbar {
+                display: none;
             }
 
             .mobile-menu-option {
-                width: 48px;
+                width: 100%;
                 min-height: 48px;
                 padding: 0;
                 justify-content: center;
                 border-radius: 18px;
+                flex: 0 0 48px;
             }
 
             .mobile-menu-option i {
@@ -1117,6 +1273,20 @@
 
             .mobile-menu-option span {
                 display: none;
+            }
+
+            .notification-dropdown {
+                position: fixed;
+                top: 82px;
+                left: 0.75rem;
+                right: 0.75rem;
+                width: auto;
+                max-height: min(70vh, 520px);
+                border-radius: 24px;
+            }
+
+            .notification-list {
+                max-height: calc(min(70vh, 520px) - 68px);
             }
 
             .filter-toolbar,
@@ -1153,6 +1323,45 @@
             .auth-card {
                 padding: 1rem;
                 border-radius: 20px;
+            }
+
+            .topbar-actions {
+                gap: 0.45rem;
+            }
+
+            .avatar {
+                width: 38px;
+                height: 38px;
+            }
+
+            .payment-card {
+                padding: 1rem;
+                border-radius: 20px;
+            }
+
+            .payment-hero {
+                grid-template-columns: 48px minmax(0, 1fr);
+                gap: 0.75rem;
+            }
+
+            .payment-icon {
+                width: 48px;
+                height: 48px;
+                border-radius: 17px;
+                font-size: 1.45rem;
+            }
+
+            .payment-amount {
+                display: grid;
+                text-align: left;
+            }
+
+            .payment-amount b {
+                text-align: left;
+            }
+
+            .payment-grid {
+                grid-template-columns: 1fr;
             }
 
             th,
