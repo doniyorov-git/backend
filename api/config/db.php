@@ -94,8 +94,20 @@ function appValue($value, $fallback = 'Kiritilmagan') {
     return $value !== '' ? $value : $fallback;
 }
 
-function appGenerateContractNumber() {
-    return date('YmdHis') . sprintf('%02d', random_int(10, 99));
+function appGenerateContractNumber(PDO $pdo) {
+    $prefix = date('ymd');
+
+    // Keep contract numbers compact while avoiding accidental duplicates.
+    for ($attempt = 0; $attempt < 5; $attempt++) {
+        $contractNumber = $prefix . sprintf('%04d', random_int(0, 9999));
+        $stmt = $pdo->prepare("SELECT 1 FROM contract_signatures WHERE contract_number = ? LIMIT 1");
+        $stmt->execute([$contractNumber]);
+        if (!$stmt->fetchColumn()) {
+            return $contractNumber;
+        }
+    }
+
+    return date('ymdHis');
 }
 
 function appFormatContractDate($value) {
@@ -353,7 +365,7 @@ function buildContractDocument(PDO $pdo, $type, $signerId, $counterpartyId = nul
 }
 
 function recordContractSignature(PDO $pdo, $type, $signerId, $counterpartyId = null, $context = []) {
-    $contractNumber = appGenerateContractNumber();
+    $contractNumber = appGenerateContractNumber($pdo);
     $signedAt = date('Y-m-d H:i:s');
     $context = array_merge($context, [
         'contract_number' => $contractNumber,
@@ -454,10 +466,12 @@ function ensureAppSchema(PDO $pdo) {
         $pdo->exec("
             UPDATE contract_signatures
             SET contract_number = CONCAT(
-                DATE_FORMAT(COALESCE(signed_at, created_at), '%Y%m%d%H%i%s'),
-                LPAD(MOD(CRC32(id), 100), 2, '0')
+                DATE_FORMAT(COALESCE(signed_at, created_at), '%y%m%d'),
+                LPAD(MOD(CRC32(id), 10000), 4, '0')
             )
-            WHERE contract_number IS NULL OR contract_number = ''
+            WHERE contract_number IS NULL
+                OR contract_number = ''
+                OR contract_number REGEXP '^[0-9]{16}$'
         ");
     }
 
