@@ -138,12 +138,29 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return resData;
         }
 
+        function parseNumberOrDefault(value, fallback = 0) {
+            const number = Number(value);
+            return value === null || value === undefined || value === "" || Number.isNaN(number) ? fallback : number;
+        }
+
         async function refreshDB() {
             if (!STATE.currentUser) return;
             try {
                 const role = STATE.currentUser.role;
                 const mapUser = u => ({ ...u, bankAccount: u.bank_account, bankMfo: u.mfo });
-                const mapProduct = p => ({ ...p, sellerId: p.seller_id, sellerName: p.seller_name, sellerPhone: p.seller_phone, moderationNote: p.moderation_note, moderatedAt: p.moderated_at, viewCount: p.view_count, createdAt: p.created_at });
+                const mapProduct = p => ({
+                    ...p,
+                    sellerId: p.seller_id,
+                    sellerName: p.seller_name,
+                    sellerPhone: p.seller_phone,
+                    prepayPercent: parseNumberOrDefault(p.prepay_percent ?? p.prepayPercent, p.model === "prepayment" ? 30 : 0),
+                    realDays: parseNumberOrDefault(p.real_days ?? p.realDays, 30),
+                    photoDays: parseNumberOrDefault(p.photo_days ?? p.photoDays, 15),
+                    moderationNote: p.moderation_note,
+                    moderatedAt: p.moderated_at,
+                    viewCount: p.view_count,
+                    createdAt: p.created_at
+                });
                 const mapOrderItem = item => ({ ...item, prodId: item.product_id || item.prodId, qty: Number(item.quantity || item.qty || 0), price: Number(item.price || 0) });
                 const mapOrder = o => ({ ...o, buyerId: o.buyer_id, sellerId: o.seller_id, commStatus: o.comm_status, dispatchReport: o.dispatch_report, createdAt: o.created_at, updatedAt: o.updated_at, items: (o.items || []).map(mapOrderItem) });
                 const mapReport = r => ({ ...r, sellerId: r.seller_id, orderId: r.order_id, prodId: r.prod_id, dueDate: r.due_date, createdAt: r.created_at });
@@ -238,6 +255,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
         const uid = prefix => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
         const normalize = value => String(value || "").toLowerCase().trim();
         const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+        const formatPercent = value => {
+            const number = parseNumberOrDefault(value, 0);
+            return Number.isInteger(number) ? String(number) : String(number).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+        };
         const phoneDigits = value => String(value || "").replace(/\D/g, "").slice(0, 9);
         const fullPhone = value => "+998" + phoneDigits(value);
         function accountDigits(value) {
@@ -469,11 +490,14 @@ const STORAGE_KEY = "myDillerUzStateV2";
 
         function sellerListingContractHtml(product = {}) {
             const seller = currentUserParty();
+            const tradeTerms = product.model
+                ? `${product.model === "prepayment" ? `, oldindan to'lov: ${formatPercent(product.prepayPercent)}%` : ", savdo modeli: realizatsiya"}, realizatsiya muddati: ${parseNumberOrDefault(product.realDays, 30)} kun`
+                : "";
             return `<div class="contract-document">
                 <h4>1. SHARTNOMA TOMONLARI</h4>
                 <p>1.1. "RoboTexnika" MCHJ, keyingi o'rinlarda "Platforma" deb yuritiladi, direktor Mirzayev Sardor nomidan bir tomondan, va</p>
                 <p>1.2. "${escapeHtml(seller.name || "Kiritilmagan")}", keyingi o'rinlarda "Ishlab chiqaruvchi" deb yuritiladi, mazkur shartnomani quyidagilar to'g'risida tuzdilar:</p>
-                ${product.name ? `<p><b>Mahsulot:</b> ${escapeHtml(product.name)}, narx: ${money(product.price)}, hudud: ${escapeHtml(product.region)}.</p>` : ""}
+                ${product.name ? `<p><b>Mahsulot:</b> ${escapeHtml(product.name)}, narx: ${money(product.price)}, hudud: ${escapeHtml(product.region)}${tradeTerms}.</p>` : ""}
                 <h4>2. SHARTNOMA PREDMETI</h4>
                 <p>2.1. Platforma Ishlab chiqaruvchining tovarlarini chakana savdo nuqtalariga sotishda vositachilik va axborot-texnologik xizmatlarini ko'rsatadi.</p>
                 <p>2.2. Platforma Mijozlar bazasini shakllantirish, tovarni targ'ib qilish, sotuvlar, yetkazib berish va to'lovlarning elektron hisobini yuritish, bozor tahlili va reyting ko'rsatkichlarini taqdim etish majburiyatlarini oladi.</p>
@@ -1527,6 +1551,9 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 const category = categoryByValue(product.category);
                 const seller = userById(product.sellerId);
                 const sellerName = product.sellerName || product.seller_name || seller.name;
+                const realDays = parseNumberOrDefault(product.realDays ?? product.real_days, 30);
+                const photoDays = parseNumberOrDefault(product.photoDays ?? product.photo_days, 15);
+                const tradeLabel = product.model === "prepayment" ? `Oldindan to'lov ${formatPercent(product.prepayPercent ?? product.prepay_percent)}%` : "Realizatsiya";
                 return `<div class="product-card">
                     <div class="product-img">${product.image ? `<img src="${imageUrl(product.image)}" alt="${escapeHtml(product.name)}">` : `<i class="${category.icon}"></i>`}</div>
                     <div class="product-info">
@@ -1537,8 +1564,9 @@ const STORAGE_KEY = "myDillerUzStateV2";
                         <div class="specs">
                             <span><i class="ri-store-2-line"></i>${escapeHtml(sellerName)}</span>
                             <span><i class="ri-map-pin-line"></i>${escapeHtml(product.region || "Tanlanmagan")}</span>
-                            <span><i class="ri-refresh-line"></i>${product.model === "prepayment" ? `Oldindan to'lov ${product.prepayPercent || 0}%` : "Realizatsiya"}</span>
-                            <span><i class="ri-camera-line"></i>Foto hisobot: har ${product.photoDays || 15} kun</span>
+                            <span><i class="ri-refresh-line"></i>${tradeLabel}</span>
+                            <span><i class="ri-calendar-check-line"></i>Realizatsiya: ${realDays} kun</span>
+                            <span><i class="ri-camera-line"></i>Foto hisobot: har ${photoDays} kun</span>
                         </div>
                         ${editable ? `<div class="grid-2 mt-2"><button class="btn btn-outline" onclick="openProductForm('${product.id}')"><i class="ri-edit-line"></i> Tahrir</button><button class="btn btn-danger" onclick="deleteProduct('${product.id}')"><i class="ri-delete-bin-line"></i> O'chirish</button></div>` : ""}
                         ${buyerActions ? `<button class="btn btn-primary w-full mt-2" onclick="addToCart('${product.id}')"><i class="ri-shopping-cart-2-line"></i> Savatga</button>` : ""}
@@ -1667,8 +1695,19 @@ const STORAGE_KEY = "myDillerUzStateV2";
             const category = document.getElementById("p-category").value;
             const region = document.getElementById("p-region").value;
             const model = document.getElementById("p-model").value;
+            const prepayPercent = Number(document.getElementById("p-prepay").value);
+            const realDays = Number(document.getElementById("p-real-days").value);
+            const photoDays = Number(document.getElementById("p-photo-days").value);
             if (!name || !price || price <= 0) {
                 showToast("Mahsulot nomi va narxni to'g'ri kiriting", "warning");
+                return;
+            }
+            if (model === "prepayment" && (!prepayPercent || prepayPercent <= 0 || prepayPercent > 100)) {
+                showToast("Oldindan to'lov foizini 1 dan 100 gacha kiriting", "warning");
+                return;
+            }
+            if (!realDays || realDays <= 0 || !photoDays || photoDays <= 0) {
+                showToast("Realizatsiya va foto hisobot kunlarini to'g'ri kiriting", "warning");
                 return;
             }
             
@@ -1679,13 +1718,16 @@ const STORAGE_KEY = "myDillerUzStateV2";
             formData.append("category", category);
             formData.append("region", region);
             formData.append("model", model);
+            formData.append("prepay_percent", model === "prepayment" ? prepayPercent : "");
+            formData.append("real_days", realDays);
+            formData.append("photo_days", photoDays);
             
             if (file) formData.append("image", file);
             if (STATE.editingProductId) formData.append("id", STATE.editingProductId);
 
             if (!STATE.editingProductId) {
                 STATE.pendingProductFormData = formData;
-                modal("Mahsulot joylash shartnomasi", sellerListingContractHtml({ name, price, region }), `
+                modal("Mahsulot joylash shartnomasi", sellerListingContractHtml({ name, price, region, model, prepayPercent, realDays }), `
                     <button class="btn btn-outline" onclick="closeModal()">Bekor qilish</button>
                     <button class="btn btn-primary" onclick="acceptSellerListingContract()">Roziman va saqlash</button>
                 `);
