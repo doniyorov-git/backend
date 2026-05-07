@@ -12,6 +12,6 @@ VALUES
 -- Insert test products
 INSERT INTO products (id, seller_id, name, sku, category, price, unit, region, model, status, image, created_at) 
 VALUES 
-('p_test1', 'u_seller1', 'Kompyuter Monitori', 'MON-001', 'electronics', 500000, 'dona', 'Toshkent shahri', 'realization', 'active', 'uploads/products/monitor.jpg', NOW()),
-('p_test2', 'u_seller1', 'Ofis Stoli', 'DSK-001', 'furniture', 1000000, 'dona', 'Toshkent viloyati', 'prepayment', 'active', 'uploads/products/desk.jpg', NOW()),
-('p_test3', 'u_seller2', 'Qurilish Mixi', 'BLD-001', 'building', 250000, 'dona', 'Samarqand', 'realization', 'active', 'uploads/products/mixer.jpg', NOW());
+('p_test1', 'u_seller1', 'Kompyuter Monitori', 'RDP-001', 'electronics', 500000, 'dona', 'Toshkent shahri', 'realization', 'approved', 'uploads/products/monitor.jpg', NOW()),
+('p_test2', 'u_seller1', 'Ofis Stoli', 'RDP-002', 'furniture', 1000000, 'dona', 'Toshkent viloyati', 'prepayment', 'approved', 'uploads/products/desk.jpg', NOW()),
+('p_test3', 'u_seller2', 'Qurilish Mixi', 'RDP-003', 'building', 250000, 'dona', 'Samarqand', 'realization', 'approved', 'uploads/products/mixer.jpg', NOW());

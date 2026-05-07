@@ -670,6 +670,110 @@
             gap: 0.25rem;
         }
 
+        .notification-wrapper {
+            position: relative;
+        }
+
+        .notification-wrapper .btn {
+            position: relative;
+        }
+
+        .notification-count {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            min-width: 19px;
+            height: 19px;
+            padding: 0 5px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--danger);
+            color: white;
+            font-size: 0.68rem;
+            font-weight: 900;
+            border: 2px solid white;
+        }
+
+        .notification-dropdown {
+            position: absolute;
+            top: calc(100% + 0.65rem);
+            right: 0;
+            width: min(360px, calc(100vw - 2rem));
+            display: none;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: white;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            z-index: 40;
+        }
+
+        .notification-dropdown.open {
+            display: block;
+        }
+
+        .notification-head {
+            padding: 0.85rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .notification-head button {
+            color: var(--primary);
+            font-weight: 800;
+            font-size: 0.78rem;
+        }
+
+        .notification-list {
+            max-height: 360px;
+            overflow-y: auto;
+        }
+
+        .notification-item {
+            width: 100%;
+            padding: 0.9rem 1rem;
+            display: grid;
+            grid-template-columns: 34px minmax(0, 1fr);
+            gap: 0.7rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .notification-item:hover,
+        .notification-item.unread {
+            background: #f0fdfa;
+        }
+
+        .notification-item i {
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            color: var(--primary);
+            border: 1px solid #ccfbf1;
+        }
+
+        .notification-item small {
+            display: block;
+            margin-top: 0.2rem;
+            color: var(--muted);
+            line-height: 1.35;
+        }
+
+        .notification-empty {
+            padding: 1.2rem;
+            text-align: center;
+            color: var(--muted);
+        }
+
         .avatar {
             width: 43px;
             height: 43px;
@@ -976,7 +1080,43 @@
             }
 
             .mobile-menu-btn {
-                display: inline-flex;
+                display: none;
+            }
+
+            .mobile-menu-dropdown {
+                position: fixed;
+                top: auto;
+                left: 0.75rem;
+                right: 0.75rem;
+                bottom: 0.75rem;
+                display: flex;
+                justify-content: space-around;
+                gap: 0.25rem;
+                padding: 0.45rem;
+                border-radius: 24px;
+                box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+            }
+
+            .mobile-menu-dropdown.open {
+                display: flex;
+            }
+
+            .mobile-menu-option {
+                width: 48px;
+                min-height: 48px;
+                padding: 0;
+                justify-content: center;
+                border-radius: 18px;
+            }
+
+            .mobile-menu-option i {
+                width: 36px;
+                height: 36px;
+                font-size: 1.25rem;
+            }
+
+            .mobile-menu-option span {
+                display: none;
             }
 
             .filter-toolbar,
@@ -994,6 +1134,10 @@
             .hide-sm {
                 display: none !important;
             }
+
+            #view-area {
+                padding-bottom: 5.5rem;
+            }
         }
 
         @media (max-width: 560px) {
@@ -1002,7 +1146,7 @@
             }
 
             #view-area {
-                padding: 0.85rem;
+                padding: 0.85rem 0.85rem 5.5rem;
             }
 
             .card,

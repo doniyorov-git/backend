@@ -31,6 +31,12 @@
                     <div class="mobile-menu-dropdown" id="mobile-menu-dropdown"></div>
                 </div>
                 <div class="topbar-actions">
+                    <div class="notification-wrapper">
+                        <button class="btn btn-outline btn-icon" onclick="toggleNotifications(event)" title="Bildirishnomalar">
+                            <i class="ri-notification-3-line"></i><span id="notification-count" class="notification-count hidden">0</span>
+                        </button>
+                        <div class="notification-dropdown" id="notification-dropdown"></div>
+                    </div>
                     <div class="hide-sm text-right">
                         <div id="topbar-user-name" class="font-bold">Foydalanuvchi</div>
                         <div id="topbar-user-role" class="text-xs text-muted">Rol</div>
@@ -57,7 +63,7 @@
 
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="../../assets/js/app.js?v=10"></script>
+    <script src="../../assets/js/app.js?v=11"></script>
 </body>
 
 </html>

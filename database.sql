@@ -2,6 +2,7 @@ CREATE DATABASE IF NOT EXISTS mydilleruz CHARACTER SET utf8mb4 COLLATE utf8mb4_u
 USE mydilleruz;
 
 DROP TABLE IF EXISTS reports;
+DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS products;
@@ -31,10 +32,26 @@ CREATE TABLE IF NOT EXISTS products (
     image VARCHAR(255),
     region VARCHAR(100),
     model VARCHAR(100),
-    status ENUM('active', 'inactive') DEFAULT 'active',
+    status ENUM('pending', 'approved', 'rejected', 'active', 'inactive') DEFAULT 'pending',
+    moderation_note TEXT,
+    moderated_by VARCHAR(50),
+    moderated_at DATETIME,
     view_count INT DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id VARCHAR(50) PRIMARY KEY,
+    user_id VARCHAR(50) NOT NULL,
+    type VARCHAR(50) DEFAULT 'info',
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    link VARCHAR(100),
+    is_read TINYINT(1) DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_notifications_user (user_id, is_read, created_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS orders (
