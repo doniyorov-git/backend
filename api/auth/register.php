@@ -11,6 +11,10 @@ if (empty($data['phone']) || empty($data['password']) || empty($data['role'])) {
     sendJson(['success' => false, 'message' => 'Missing required fields'], 400);
 }
 
+if (empty($data['accepted_contract'])) {
+    sendJson(['success' => false, 'message' => 'Shartnomaga rozilik majburiy'], 400);
+}
+
 $id = uniqid('u_');
 $name = $data['name'] ?? '';
 $inn = $data['inn'] ?? '';
@@ -30,6 +34,7 @@ if (!in_array($role, ['seller', 'buyer'])) {
 try {
     $stmt = $pdo->prepare("INSERT INTO users (id, name, inn, phone, password, role, bank_account, mfo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->execute([$id, $name, $inn, $phone, $password, $role, $bank_account, $mfo]);
+    createPlatformContract($pdo, $id, 'registration_platform');
     
     $_SESSION['user'] = [
         'id' => $id,

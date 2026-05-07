@@ -43,9 +43,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $model = $_POST['model'] ?? '';
     $price = $_POST['price'] ?? 0;
     $unit = $_POST['unit'] ?? 'dona';
+    $acceptedContract = !empty($_POST['accepted_contract']);
 
     if (!$name || !$category || !$region || !$model || (float) $price <= 0) {
         sendJson(['success' => false, 'message' => 'Mahsulot nomi, kategoriya, viloyat, model va narx majburiy'], 400);
+    }
+
+    if (!$isUpdate && !$acceptedContract) {
+        sendJson(['success' => false, 'message' => 'Mahsulot joylash shartnomasiga rozilik majburiy'], 400);
     }
 
     $imagePath = saveUploadedFile('image', 'products', 'img');
@@ -76,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
         ");
         $stmt->execute([$id, $sellerId, $name, $sku, $category, $region, $model, $price, $unit, $imagePath]);
+        createProductListingContract($pdo, $sellerId, $id);
         notifyRole($pdo, 'admin', 'Yangi mahsulot moderatsiyada', $name . ' mahsuloti tasdiqlash uchun yuborildi.', 'info', 'admin-moderation');
     }
     

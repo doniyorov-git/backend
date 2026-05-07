@@ -34,6 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if (empty($data['sellerId']) || empty($data['items']) || empty($data['total'])) {
             sendJson(['success' => false, 'message' => 'Missing data'], 400);
         }
+        if (empty($data['accepted_contract'])) {
+            sendJson(['success' => false, 'message' => 'Xarid shartnomasiga rozilik majburiy'], 400);
+        }
         
         $orderId = uniqid('ord_');
         $comm = $data['total'] * 0.05; // 5% comm
@@ -55,6 +58,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $dueDate = date('Y-m-d', strtotime('+15 days'));
                 $stmt3->execute([$repId, $data['sellerId'], $orderId, $item['prodId'], 'pending', $dueDate]);
             }
+
+            createBuyerOrderContract($pdo, $buyerId, $data['sellerId'], $orderId);
             
             $pdo->commit();
             createNotification($pdo, $data['sellerId'], 'Yangi buyurtma', '#' . $orderId . ' buyurtma qabul qilindi.', 'info', 'seller-orders');

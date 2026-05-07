@@ -11,6 +11,10 @@ if (empty($data['phone']) || empty($data['password'])) {
     sendJson(['success' => false, 'message' => 'Telefon va parol kiritilishi shart'], 400);
 }
 
+if (empty($data['accepted_contract'])) {
+    sendJson(['success' => false, 'message' => 'Shartnomaga rozilik majburiy'], 400);
+}
+
 $phone = preg_replace('/\D/', '', $data['phone']);
 if (strlen($phone) === 9) {
     $phone = '998' . $phone;
@@ -28,6 +32,7 @@ if ($user && $password === $user['password']) {
     
     unset($user['password']);
     $_SESSION['user'] = $user;
+    createPlatformContract($pdo, $user['id'], 'login_platform');
     
     sendJson(['success' => true, 'user' => $user]);
 }

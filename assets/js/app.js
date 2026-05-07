@@ -76,6 +76,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 { id: "admin-moderation", icon: "ri-shield-check-line", title: "Moderatsiya" },
                 { id: "admin-comm", icon: "ri-money-dollar-circle-line", title: "Komissiya" },
                 { id: "admin-reports", icon: "ri-camera-lens-line", title: "Foto Hisobotlar" },
+                { id: "contracts", icon: "ri-file-shield-2-line", title: "Shartnomalar" },
                 { id: "tickets", icon: "ri-scales-3-line", title: "Yordam" }
             ],
             seller: [
@@ -83,6 +84,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 { id: "seller-catalog", icon: "ri-function-line", title: "Mening Katalogim" },
                 { id: "seller-orders", icon: "ri-shopping-bag-3-line", title: "Sotuvlar" },
                 { id: "seller-finance", icon: "ri-wallet-3-line", title: "Moliya" },
+                { id: "contracts", icon: "ri-file-shield-2-line", title: "Shartnomalar" },
                 { id: "tickets", icon: "ri-scales-3-line", title: "Yordam" }
             ],
             buyer: [
@@ -90,12 +92,13 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 { id: "buyer-cart", icon: "ri-shopping-cart-line", title: "Savat" },
                 { id: "buyer-orders", icon: "ri-file-list-3-line", title: "Buyurtmalarim" },
                 { id: "buyer-reports", icon: "ri-camera-line", title: "Foto Hisobot" },
+                { id: "contracts", icon: "ri-file-shield-2-line", title: "Shartnomalar" },
                 { id: "tickets", icon: "ri-scales-3-line", title: "Yordam" }
             ]
         };
 
         const DB = {
-            users: [], products: [], orders: [], reports: [], tickets: [], notifications: [], categories: DEFAULT_CATEGORIES,
+            users: [], products: [], orders: [], reports: [], tickets: [], notifications: [], contracts: [], categories: DEFAULT_CATEGORIES,
             cart: JSON.parse(localStorage.getItem(STORAGE_KEY + "_cart") || "[]")
         };
         const STATE = {
@@ -103,6 +106,8 @@ const STORAGE_KEY = "myDillerUzStateV2";
             currentView: "",
             editingProductId: null,
             contractTarget: "register",
+            productContractAccepted: false,
+            buyerContractAccepted: false,
             filters: {
                 users: { search: "", role: "all", status: "all" },
                 orders: { search: "", status: "all" },
@@ -154,44 +159,60 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     }))
                 });
                 const mapNotification = n => ({ ...n, isRead: Number(n.is_read) === 1, createdAt: n.created_at });
+                const mapContract = c => ({
+                    ...c,
+                    contractType: c.contract_type,
+                    signerUserId: c.signer_user_id,
+                    counterpartyUserId: c.counterparty_user_id,
+                    productId: c.product_id,
+                    orderId: c.order_id,
+                    documentText: c.document_text,
+                    signedAt: c.signed_at || c.created_at
+                });
 
                 if (role === 'admin') {
-                    const [usersRes, dashRes, prodRes, tickRes, notifRes] = await Promise.all([
+                    const [usersRes, dashRes, prodRes, tickRes, notifRes, contractRes] = await Promise.all([
                         apiFetch('api/admin/users.php'),
                         apiFetch('api/admin/dashboard.php'),
                         apiFetch('api/admin/products.php'),
                         apiFetch('api/tickets.php'),
-                        apiFetch('api/notifications.php')
+                        apiFetch('api/notifications.php'),
+                        apiFetch('api/contracts.php')
                     ]);
                     DB.users = (usersRes.data || []).map(mapUser);
                     DB.orders = (dashRes.data || []).map(mapOrder);
                     DB.products = (prodRes.data || []).map(mapProduct);
                     DB.tickets = (tickRes.data || []).map(mapTicket);
                     DB.notifications = (notifRes.data || []).map(mapNotification);
+                    DB.contracts = (contractRes.data || []).map(mapContract);
                 } else if (role === 'seller') {
-                    const [prodRes, orderRes, repRes, tickRes, notifRes] = await Promise.all([
+                    const [prodRes, orderRes, repRes, tickRes, notifRes, contractRes] = await Promise.all([
                         apiFetch('api/seller/products.php'),
                         apiFetch('api/seller/orders.php'),
                         apiFetch('api/seller/reports.php'),
                         apiFetch('api/tickets.php'),
-                        apiFetch('api/notifications.php')
+                        apiFetch('api/notifications.php'),
+                        apiFetch('api/contracts.php')
                     ]);
                     DB.products = (prodRes.data || []).map(mapProduct);
                     DB.orders = (orderRes.data || []).map(mapOrder);
                     DB.reports = (repRes.data || []).map(mapReport);
                     DB.tickets = (tickRes.data || []).map(mapTicket);
                     DB.notifications = (notifRes.data || []).map(mapNotification);
+                    DB.contracts = (contractRes.data || []).map(mapContract);
                 } else if (role === 'buyer') {
-                    const [prodRes, orderRes, tickRes, notifRes] = await Promise.all([
+                    const [prodRes, orderRes, tickRes, notifRes, contractRes] = await Promise.all([
                         apiFetch('api/buyer/products.php'),
                         apiFetch('api/buyer/orders.php'),
                         apiFetch('api/tickets.php'),
-                        apiFetch('api/notifications.php')
+                        apiFetch('api/notifications.php'),
+                        apiFetch('api/contracts.php')
                     ]);
                     DB.products = (prodRes.data || []).map(mapProduct);
                     DB.orders = (orderRes.data || []).map(mapOrder);
                     DB.tickets = (tickRes.data || []).map(mapTicket);
                     DB.notifications = (notifRes.data || []).map(mapNotification);
+                    DB.contracts = (contractRes.data || []).map(mapContract);
                 }
                 renderNotificationBell();
             } catch (e) {
@@ -376,100 +397,173 @@ const STORAGE_KEY = "myDillerUzStateV2";
             }
         }
 
+        function contractDocHtml(text) {
+            return `<div class="contract-doc">${escapeHtml(text).replace(/\n/g, "<br>")}</div>`;
+        }
+
+        function platformRequisitesText() {
+            return [
+                "PLATFORMA:",
+                "«RoboTexnika» MCHJ",
+                "Direktor: Mirzayev Sardor",
+                "STIR: __",
+                "H/r: __",
+                "MFO: __",
+                "Manzil: Andijon sh.",
+                "Imzo: elektron tasdiq"
+            ].join("\n");
+        }
+
+        function partyRequisitesText(label, user = {}) {
+            return [
+                `${label}:`,
+                `Nomi: ${user.name || "________________"}`,
+                `STIR: ${user.inn || "__"}`,
+                `Telefon: ${user.phone || "__"}`,
+                `H/r: ${user.bankAccount || user.bank_account || "__"}`,
+                `MFO: ${user.bankMfo || user.mfo || "__"}`,
+                "Imzo: elektron tasdiq"
+            ].join("\n");
+        }
+
+        function authDraftUser(target) {
+            if (target === "register") {
+                return {
+                    name: document.getElementById("reg-name")?.value.trim() || "________________",
+                    inn: document.getElementById("reg-inn")?.value.trim() || "__",
+                    phone: document.getElementById("reg-phone")?.value.trim() || "__",
+                    bankAccount: document.getElementById("reg-bank-acc")?.value.trim() || "__",
+                    bankMfo: document.getElementById("reg-bank-mfo")?.value.trim() || "__"
+                };
+            }
+            return {
+                name: "________________",
+                phone: document.getElementById("login-phone")?.value.trim() || "__"
+            };
+        }
+
+        function platformAgreementText(user = {}, sourceLabel = "elektron rozilik orqali") {
+            const userName = user.name || "________________";
+            const director = user.director || "________________";
+            return `HAMKORLIK VA XIZMAT KO'RSATISH SHARTNOMASI № 1
+«___» ________ 2026 y.    Andijon sh.
+
+1. SHARTNOMA TOMONLARI
+1.1. «RoboTexnika» MCHJ, keyingi o'rinlarda «Platforma» deb yuritiladi, direktor Mirzayev Sardor (Ustav asosida) nomidan bir tomondan, va
+1.2. «${userName}», keyingi o'rinlarda «Ishlab chiqaruvchi» deb yuritiladi, direktor ${director} (Ustav asosida) nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:
+
+2. SHARTNOMA PREDMETI
+2.1. Platforma Ishlab chiqaruvchining tovarlarini chakana savdo nuqtalariga (Mijozlarga) sotishda vositachilik va axborot-texnologik xizmatlarini ko'rsatadi.
+2.2. Platforma quyidagi majburiyatlarni oladi:
+- Mijozlar bazasini shakllantirish va tovarni targ'ib qilish;
+- Sotuvlar, yetkazib berish va to'lovlarning elektron hisobini yuritish;
+- Ishlab chiqaruvchiga bozor tahlili va reyting ko'rsatkichlarini taqdim etish;
+- Shartnomaning 5-bandiga muvofiq kafolatli hisob-kitoblarni ta'minlash.
+
+3. TOMONLARNING HUQUQ VA MAJBURIYATLARI
+3.1. Ishlab chiqaruvchining majburiyatlari:
+- Tovarlarning sifati va amaldagi standartlarga (sertifikatlarga) mosligini ta'minlash;
+- Platforma orqali kelgan buyurtmalarni o'z vaqtida va to'liq hajmda yetkazib berish;
+- Tovar qoldiqlari va narxlar o'zgarishi haqida Platformani zudlik bilan xabardor qilish.
+3.2. Platformaning huquqlari:
+- Ishlab chiqaruvchining reyting ko'rsatkichlari pasaygan taqdirda xizmat ko'rsatishni vaqtincha to'xtatish;
+- Mijozlar va Ishlab chiqaruvchi o'rtasidagi to'lov intizomini nazorat qilish.
+
+4. KOMISSIYA MUKOFOTI VA HISOB-KITOBLAR
+4.1. Platformaning xizmat haqi (komissiya) Mijoz tomonidan to'langan tovar qiymatining 5% (besh foiz) miqdorini tashkil etadi.
+4.2. Platforma xizmatlari uchun hisob-fakturalarni (EHF) har oy yakunida taqdim etadi.
+4.3. Ishlab chiqaruvchi komissiya to'lovini solishtirma dalolatnoma tasdiqlangan kundan boshlab 5 (besh) bank ish kuni ichida Platformaning hisob raqamiga o'tkazadi.
+4.4. Agar tovar Mijoz tomonidan qaytarilsa, ushbu tovar bo'yicha hisoblangan komissiya keyingi davr hisob-kitoblarida chegirib qolinadi.
+
+5. KAFOLAT VA MOLIYAVIY QO'LLAB-QUVVATLASH
+5.1. Platforma Mijozlarning to'lov qobiliyatini o'z ichki tizimi orqali tahlil qiladi.
+5.2. Platforma va Ishlab chiqaruvchi o'rtasidagi alohida kelishuvga asosan, Platforma Mijozning muddati o'tgan debitorlik qarzdorligini vaqtinchalik (faktoring yoki kafolat sifatida) qoplab berishi mumkin.
+5.3. Platforma tomonidan qoplangan mablag' Mijozdan undirilgandan so'ng yoki kelishilgan muddatda Platformaga qaytariladi.
+
+6. REYTING VA ELEKTRON TIZIM
+6.1. Barcha oldi-sotdi operatsiyalari Platformaning dasturiy ta'minoti orqali qayd etiladi. Ushbu tizim ma'lumotlari hisob-kitob uchun asos hisoblanadi.
+6.2. Ishlab chiqaruvchining reytingi quyidagilarga ta'sir qiladi:
+- Platforma tomonidan beriladigan kafolat limitlariga;
+- Tovarlarning tizimda ko'rinish ustuvorligiga (priority).
+
+7. FORS-MAJOR VA JAVOBGARLIK
+7.1. Tomonlar o'z majburiyatlarini bajarmagan taqdirda O'zbekiston Respublikasi qonunchiligiga muvofiq javobgar bo'ladilar.
+7.2. Yetkazib berilgan tovarning sifati, yaroqlilik muddati va qadoqlanishi uchun to'liq javobgarlik Ishlab chiqaruvchi zimmasida bo'ladi.
+
+8. NIZOLARNI HAL ETISH
+8.1. Barcha kelishmovchiliklar muzokaralar yo'li bilan hal etiladi.
+8.2. Kelishuvga erishilmagan taqdirda, nizo Platforma joylashgan hududdagi iqtisodiy sudda ko'rib chiqiladi.
+
+9. YAKUNIY QOIDALAR
+9.1. Shartnoma imzolangan kundan boshlab 12 oy davomida amal qiladi. Agar tomonlardan biri muddat tugashidan 30 kun avval bekor qilish haqida yozma xabar bermasa, shartnoma keyingi muddatga avtomatik uzaytiriladi.
+9.2. Mazkur shartnoma ikki nusxada tuzildi va ${sourceLabel} tasdiqlandi.
+
+10. TOMONLARNING REKVIZITLARI
+
+${platformRequisitesText()}
+
+${partyRequisitesText("ISHLAB CHIQARUVCHI", user)}`;
+        }
+
+        function buyerAgreementText(buyer = {}, seller = {}, orderSummary = "") {
+            const buyerName = buyer.name || "________________";
+            const director = buyer.director || "________________";
+            return `MAHSULOT YETKAZIB BERISH VA XIZMAT KO'RSATISH SHARTNOMASI №___
+«___» ________ 2026 y.     Andijon sh.
+
+1. SHARTNOMA TOMONLARI
+1.1. «RoboTexnika» MCHJ, keyingi o'rinlarda «Platforma» deb yuritiladi, direktor Mirzayev Sardor nomidan, va
+1.2. ${buyerName}, keyingi o'rinlarda «Xaridor» deb yuritiladi, direktor (yoki YATT) ${director} nomidan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:
+
+2. SHARTNOMA PREDMETI
+2.1. Platforma Xaridorga tizimdagi Ishlab chiqaruvchilarning mahsulotlarini tanlash, buyurtma berish va yetkazib berishni tashkil qilish xizmatlarini ko'rsatadi.
+2.2. Xaridor Platforma orqali buyurtma qilingan tovarlarni qabul qilish va ularning haqini belgilangan muddatlarda to'lash majburiyatini oladi.
+
+3. BUYURTMA VA YETKAZIB BERISH TARTIBI
+3.1. Xaridor buyurtmani Platformaning elektron tizimi (ilova yoki sayt) orqali amalga oshiradi.
+3.2. Tovarlar Xaridorning savdo nuqtasiga Ishlab chiqaruvchi yoki Platformaning logistika hamkorlari tomonidan yetkaziladi.
+3.3. Tovar qabul qilinganda Xaridor uning sifati va miqdorini tekshirib, elektron yoki qog'oz shaklidagi yuk xatini (tovar-transport nakladnoyini) imzolaydi.
+
+4. HISOB-KITOB TARTIBI
+4.1. Tovar narxi Platforma tizimida buyurtma berilgan vaqtdagi narx bo'yicha belgilanadi.
+4.2. Xaridor tovar uchun to'lovni quyidagi shaklda amalga oshirishi mumkin:
+- Oldindan to'lov (100%);
+- Bo'lib to'lash yoki kechiktirilgan to'lov (Platforma tomonidan belgilangan limit va reyting asosida).
+4.3. To'lovlar naqd pulsiz shaklda, Platformaning tizimida ko'rsatilgan hisob raqamlariga amalga oshiriladi.
+
+5. PLATFORMANING KAFOLATLARI
+5.1. Platforma Xaridor va Ishlab chiqaruvchi o'rtasidagi hisob-kitoblarning shaffofligini ta'minlaydi.
+5.2. Agar yetkazib berilgan tovar yaroqsiz (brak) chiqsa, Xaridor 24 soat ichida Platformaga ariza beradi va Platforma tovarni almashtirish yoki mablag'ni qaytarish jarayonini muvofiqlashtiradi.
+5.3. Xaridor to'lovlarni o'z vaqtida amalga oshirsa, Platforma unga "Ishonchli Xaridor" maqomini va tovarlarni kechiktirib to'lash (kredit liniyasi) limitlarini taqdim etadi.
+
+6. TOMONLARNING JAVOBGARLIGI
+6.1. To'lov kechiktirilganda: Xaridor to'lov kechiktirilgan har bir kun uchun to'lanmagan summaning 0,1% miqdorida penya to'laydi, lekin bu jami summaning 10%idan oshmasligi kerak.
+6.2. Mahsulotning sifati uchun bevosita Ishlab chiqaruvchi javobgar hisoblanadi, biroq Platforma nizoli vaziyatlarni hal qilishda Xaridor manfaatlarini himoya qilishga ko'maklashadi.
+
+7. REYTING TIZIMI
+7.1. Xaridorning to'lov intizomi asosida Platformada uning shaxsiy reytingi yuritiladi.
+7.2. Past reyting Xaridor uchun kechiktirib to'lash imkoniyatining yopilishiga va buyurtmalarning cheklanishiga sabab bo'lishi mumkin.
+
+8. SHARTNOMANING AMAL QILISHI
+8.1. Shartnoma imzolangan kundan boshlab 12 oy davomida amal qiladi.
+8.2. Shartnoma Platformaning elektron tizimida "Ofertani qabul qilish" tugmasini bosish orqali ham tuzilishi mumkin va u yuridik kuchga ega.
+
+9. TOMONLARNING REKVIZITLARI
+
+${platformRequisitesText()}
+
+${partyRequisitesText("XARIDOR", buyer)}
+
+${partyRequisitesText("SOTUVCHI / ISHLAB CHIQARUVCHI", seller)}
+
+${orderSummary}`;
+        }
+
         function openContractModal(e, target = "register") {
             e?.preventDefault();
             STATE.contractTarget = target;
-            const text = `
-<div style="font-size:0.85rem; line-height:1.6; max-height: 400px; overflow-y: auto; padding-right: 10px;">
-<b>HAMKORLIK VA XIZMAT KO'RSATISH SHARTNOMASI №___</b><br>
-sh. __ «_» ____ 2026 y.<br><br>
-<b>1. SHARTNOMA TOMONLARI</b><br>
-1.1. «RoboTexnika» MCHJ, direktor Mirzayev Sardor, Ustav asosida ish yurituvchi, keyingi o'rinlarda «Platforma» deb yuritiladi, bir tomondan,<br>
-1.2. ________, keyingi o'rinlarda «Ishlab chiqaruvchi» deb yuritiladi, ikkinchi tomondan,<br>
-birgalikda «Tomonlar» deb ataladi, ushbu shartnomani quyidagilar to'g'risida tuzdilar.<br><br>
-<b>2. SHARTNOMA PREDMETI</b><br>
-2.1. Platforma Ishlab chiqaruvchiga quyidagi xizmatlarni ko'rsatadi:<br>
-— chakana savdo nuqtalarini jalb qilish (keyingi o'rinlarda «Mijozlar»);<br>
-— savdolarni kuzatib borish;<br>
-— yetkazib berish va to'lovlar hisobini yuritish;<br>
-— tahliliy ma'lumotlar va reyting tizimini taqdim etish;<br>
-— kafolatli hisob-kitoblarni ta'minlash.<br>
-2.2. Ishlab chiqaruvchi tovarlarni savdo nuqtalariga mustaqil ravishda yoki kelishilgan kanallar orqali yetkazib beradi.<br>
-2.3. Tovar bir vaqtning o'zida bir nechta savdo nuqtalarida sotilishi mumkin.<br><br>
-<b>3. KOMISSIYA MUKOFOTI</b><br>
-3.1. Platforma yakuniy xaridor tomonidan to'langan tovar qiymatining 5% (besh foiz) miqdorida haq oladi.<br>
-3.2. Komissiya hisoblash uchun asos — Ishlab chiqaruvchining hisob raqamiga pul tushumi hisoblanadi.<br>
-3.3. Komissiya faqat tasdiqlangan va to'langan bitimlar bo'yicha hisoblanadi.<br><br>
-<b>4. HISOB-KITOB TARTIBI</b><br>
-4.1. Ishlab chiqaruvchi Platformaga haftasiga kamida bir marta hisobot taqdim etadi.<br>
-4.2. Hisobot asosida Tomonlar o'rtasida solishtirma dalolatnoma tuziladi.<br>
-4.3. Komissiya to'lovi 5 (besh) kalendar kuni ichida amalga oshiriladi.<br><br>
-<b>5. KAFOLAT MAJBURIYATLARI</b><br>
-5.1. Platforma hisob-kitoblarni nazorat qiladi.<br>
-5.2. Mijoz to'lovni kechiktirsa, Platforma vaqtincha qarzni qoplashi mumkin.<br>
-5.3. Bu mablag' keyinchalik qaytariladi.<br>
-5.4. Kafolat limitlari Platformaning ichki qoidalariga bog'liq.<br><br>
-<b>6. REYTING TIZIMI</b><br>
-6.1. Platforma reyting tizimini yuritadi.<br>
-6.2. Reyting quyidagilar asosida baholanadi:<br>
-— to'lov intizomi<br>
-— savdo hajmi<br>
-— hisobotlar<br>
-— kechiktirishlar<br>
-6.3. Reyting ta'sir qiladi:<br>
-— limitlarga<br>
-— shartlarga<br>
-— kafolatlarga<br>
-6.4. Reyting ma'lumotlari ichki tizim hisoblanadi.<br><br>
-<b>7. ELEKTRON TIZIM</b><br>
-7.1. Barcha operatsiyalar elektron tizimda yuritiladi.<br>
-7.2. Ushbu ma'lumotlar rasmiy hisoblanadi.<br>
-7.3. Tasdiqlangan ma'lumotlar haqiqiy deb qabul qilinadi.<br><br>
-<b>8. JAVOBGARLIK</b><br>
-8.1. Tomonlar ma'lumotlar uchun javobgar.<br>
-8.2. Xato bo'lsa, bartaraf etiladi.<br><br>
-<b>9. MUDDAT</b><br>
-9.1. Shartnoma 12 oy amal qiladi.<br>
-9.2. Avtomatik uzaytiriladi.<br><br>
-<b>10. YAKUNIY QOIDALAR</b><br>
-10.1. Nizolar muzokara orqali hal qilinadi.<br>
-10.2. O'zgarishlar kelishuv asosida kiritiladi.<br>
-10.3. Elektron shaklda berilgan rozilik, buyurtma, tasdiq va xabarnomalar Tomonlar uchun yozma hujjat bilan teng kuchga ega hisoblanadi.<br>
-10.4. Platforma xizmatlaridan foydalanish davom etishi foydalanuvchining amaldagi qoidalarga roziligini bildiradi.<br><br>
-<b>11. MAXFIYLIK VA MA'LUMOTLARNI HIMOYA QILISH</b><br>
-11.1. Tomonlar shartnoma doirasida olingan tijorat, shaxsiy va moliyaviy ma'lumotlarni uchinchi shaxslarga asossiz oshkor qilmaydi.<br>
-11.2. Platforma foydalanuvchi ma'lumotlarini buyurtmalarni rasmiylashtirish, to'lovlarni nazorat qilish, yetkazib berish va texnik qo'llab-quvvatlash maqsadlarida qayta ishlashi mumkin.<br>
-11.3. Foydalanuvchi telefon raqami, STIR, bank rekvizitlari va boshqa kiritilgan ma'lumotlar to'g'riligiga shaxsan javobgar bo'ladi.<br><br>
-<b>12. YETKAZIB BERISH VA QABUL QILISH</b><br>
-12.1. Tovarlarni yetkazib berish muddati, usuli va mas'ul shaxslari buyurtma yoki Tomonlarning alohida kelishuvida belgilanadi.<br>
-12.2. Qabul qilish vaqtida aniqlangan kamchiliklar elektron tizim orqali darhol qayd etiladi.<br>
-12.3. Tovar sifati, komplektligi va kafolat hujjatlari bo'yicha talablar ishlab chiqaruvchi yoki sotuvchi zimmasida qoladi.<br><br>
-<b>13. TO'LOV, QARZDORLIK VA CHEKLOVLAR</b><br>
-13.1. To'lovlar naqd pulsiz hisob-kitob, kelishilgan muddatli to'lov yoki Platforma qo'llab-quvvatlaydigan boshqa usullar orqali amalga oshiriladi.<br>
-13.2. Kechiktirilgan to'lovlar reytingga, limitlarga va keyingi buyurtmalar shartlariga ta'sir qilishi mumkin.<br>
-13.3. Platforma xavfsizlik, qarzdorlik yoki noto'g'ri ma'lumot aniqlanganda xizmatlardan foydalanishni vaqtincha cheklashi mumkin.<br><br>
-<b>14. ELEKTRON XABARNOMALAR</b><br>
-14.1. SMS, telefon qo'ng'irog'i, platformadagi bildirishnoma yoki elektron xabar orqali yuborilgan ma'lumotlar rasmiy xabarnoma sifatida qabul qilinadi.<br>
-14.2. Foydalanuvchi aloqa ma'lumotlari o'zgarganda ularni platformada yangilashi shart.<br><br>
-<b>15. FORS-MAJOR</b><br>
-15.1. Tomonlar tabiiy ofat, uzilishlar, davlat organlari qarorlari, bank yoki aloqa tizimlaridagi nosozliklar kabi nazoratdan tashqari holatlar uchun javobgar bo'lmaydi.<br>
-15.2. Bunday holatlar yuzaga kelganda Tomonlar imkon qadar qisqa muddatda bir-birini xabardor qiladi va majburiyatlarni bajarish tartibini kelishadi.<br><br>
-<b>16. REKVIZITLAR</b><br>
-PLATFORMA:<br>
-«RoboTexnika» MCHJ<br>
-Direktor: Mirzayev Sardor<br>
-STIR: __<br>
-H/r: __<br>
-Manzil: __<br>
-Imzo: __<br><br>
-ISHLAB CHIQARUVCHI:<br>
-Nomi: __<br>
-STIR: __<br>
-H/r: __<br>
-Manzil: __<br>
-Imzo: __
-</div>`;
-            modal("Hamkorlik Shartnomasi", text, `<button class="btn btn-outline" onclick="closeModal()">Yopish</button><button class="btn btn-primary" onclick="acceptContract()">Roziman</button>`);
+            const text = platformAgreementText(authDraftUser(target), target === "login" ? "tizimga kirish vaqtida" : "ro'yxatdan o'tish vaqtida");
+            modal("Hamkorlik Shartnomasi", contractDocHtml(text), `<button class="btn btn-outline" onclick="closeModal()">Yopish</button><button class="btn btn-primary" onclick="acceptContract()">Roziman</button>`);
         }
 
         function acceptContract() {
@@ -482,6 +576,53 @@ Imzo: __
                 const btn = document.getElementById(target === "login" ? "login-btn" : "register-btn");
                 if (btn) btn.disabled = false;
             }
+        }
+
+        function openSellerProductContractModal() {
+            const text = platformAgreementText(STATE.currentUser || {}, "mahsulot joylash vaqtida");
+            modal(
+                "Mahsulot joylash shartnomasi",
+                contractDocHtml(text),
+                `<button class="btn btn-outline" onclick="closeModal()">Bekor qilish</button><button class="btn btn-primary" onclick="acceptSellerProductContract()">Roziman</button>`
+            );
+        }
+
+        function acceptSellerProductContract() {
+            STATE.productContractAccepted = true;
+            closeModal();
+            openProductForm(null, true);
+        }
+
+        function openBuyerPurchaseContractModal() {
+            const sellers = [...new Set(DB.cart.map(item => productById(item.prodId)?.sellerId).filter(Boolean))];
+            const sellerNameById = id => {
+                const product = DB.products.find(item => item.sellerId === id);
+                return product?.sellerName || product?.seller_name || userById(id).name;
+            };
+            const seller = sellers.length === 1
+                ? { ...userById(sellers[0]), name: sellerNameById(sellers[0]) }
+                : { name: sellers.map(sellerNameById).join(", ") };
+            const total = DB.cart.reduce((sum, item) => {
+                const product = productById(item.prodId);
+                return product ? sum + Number(product.price || 0) * item.qty : sum;
+            }, 0);
+            const orderSummary = [
+                "Buyurtma ma'lumoti:",
+                `Sotuvchilar: ${seller.name || "__"}`,
+                `Mahsulot turlari: ${DB.cart.length}`,
+                `Jami summa: ${money(total)}`
+            ].join("\n");
+            modal(
+                "Xarid shartnomasi",
+                contractDocHtml(buyerAgreementText(STATE.currentUser || {}, seller, orderSummary)),
+                `<button class="btn btn-outline" onclick="closeModal()">Bekor qilish</button><button class="btn btn-primary" onclick="acceptBuyerPurchaseContract()">Roziman</button>`
+            );
+        }
+
+        function acceptBuyerPurchaseContract() {
+            STATE.buyerContractAccepted = true;
+            closeModal();
+            checkout(true);
         }
 
         async function doLogin() {
@@ -501,7 +642,7 @@ Imzo: __
                     btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Kuting...`;
                 }
                 
-                const res = await apiFetch('api/auth/login.php', 'POST', { phone, password });
+                const res = await apiFetch('api/auth/login.php', 'POST', { phone, password, accepted_contract: true });
                 if (res.success) {
                     STATE.currentUser = normalizeSessionUser(res.user);
                     localStorage.setItem(SESSION_KEY, JSON.stringify(STATE.currentUser));
@@ -547,7 +688,7 @@ Imzo: __
                 }
                 
                 const res = await apiFetch('api/auth/register.php', 'POST', {
-                    role, name, inn, bank_account: bankAcc, mfo: bankMfo, phone, password
+                    role, name, inn, bank_account: bankAcc, mfo: bankMfo, phone, password, accepted_contract: true
                 });
                 
                 if (res.success) {
@@ -862,6 +1003,7 @@ Imzo: __
                 "buyer-cart": renderBuyerCart,
                 "buyer-orders": renderBuyerOrders,
                 "buyer-reports": renderBuyerReports,
+                contracts: renderContracts,
                 tickets: renderTickets
             };
             if (renderers[STATE.currentView]) renderers[STATE.currentView](container);
@@ -1337,6 +1479,64 @@ Imzo: __
             container.innerHTML = `<div class="card"><div class="section-head"><div><h3>Foto hisobotlar</h3><p class="text-sm text-muted">${reports.length} ta vazifa</p></div></div>${reports.length ? reportGrid(reports, true) : emptyHtml("ri-camera-line", "Foto hisobot vazifalari yo'q")}</div>`;
         }
 
+        function contractTypeLabel(type) {
+            return {
+                registration_platform: "Platforma (register)",
+                login_platform: "Platforma (login)",
+                manual_platform: "Platforma",
+                product_listing: "Mahsulot joylash",
+                buyer_order: "Xarid / yetkazib berish"
+            }[type] || type || "Shartnoma";
+        }
+
+        function renderContracts(container) {
+            const contracts = DB.contracts || [];
+            container.innerHTML = `
+                <div class="card">
+                    <div class="section-head">
+                        <div>
+                            <h3>Shartnomalar</h3>
+                            <p class="text-sm text-muted">${contracts.length} ta imzolangan shartnoma</p>
+                        </div>
+                    </div>
+                    ${contracts.length ? contractTable(contracts) : emptyHtml("ri-file-shield-2-line", "Shartnomalar hozircha yo'q")}
+                </div>`;
+        }
+
+        function contractTable(contracts) {
+            return `<div class="table-responsive"><table>
+                <thead><tr><th>Shartnoma</th><th>Tomonlar</th><th>Bog'lanish</th><th>Imzolangan vaqt</th><th>Amal</th></tr></thead>
+                <tbody>${contracts.map(contract => {
+                    const counterparty = contract.counterparty_name || "Platforma";
+                    const related = contract.orderId
+                        ? `Buyurtma #${escapeHtml(contract.orderId)}`
+                        : (contract.product_name ? `Mahsulot: ${escapeHtml(contract.product_name)}` : "-");
+                    return `<tr>
+                        <td><b>${escapeHtml(contract.title || contractTypeLabel(contract.contractType))}</b><div class="text-xs text-muted">${escapeHtml(contractTypeLabel(contract.contractType))}</div></td>
+                        <td><b>${escapeHtml(contract.signer_name || "")}</b><div class="text-xs text-muted">${escapeHtml(counterparty)}</div></td>
+                        <td>${related}</td>
+                        <td>${escapeHtml(contract.signedAt || "")}</td>
+                        <td><button class="btn btn-outline btn-icon" onclick="openContractDetails('${contract.id}')" title="Ko'rish"><i class="ri-eye-line"></i></button></td>
+                    </tr>`;
+                }).join("")}</tbody>
+            </table></div>`;
+        }
+
+        function openContractDetails(id) {
+            const contract = DB.contracts.find(item => item.id === id);
+            if (!contract) return;
+            modal(
+                escapeHtml(contract.title || "Shartnoma"),
+                `<div class="details-list mb-4">
+                    <div class="details-row"><span class="details-label">Turi:</span><span class="details-value">${escapeHtml(contractTypeLabel(contract.contractType))}</span></div>
+                    <div class="details-row"><span class="details-label">Imzolagan:</span><span class="details-value">${escapeHtml(contract.signer_name || "")}</span></div>
+                    <div class="details-row"><span class="details-label">Ikkinchi tomon:</span><span class="details-value">${escapeHtml(contract.counterparty_name || "Platforma")}</span></div>
+                    <div class="details-row"><span class="details-label">Vaqt:</span><span class="details-value">${escapeHtml(contract.signedAt || "")}</span></div>
+                </div>${contractDocHtml(contract.documentText || "")}`,
+                `<button class="btn btn-outline" onclick="closeModal()">Yopish</button>`
+            );
+        }
+
         function renderTickets(container) {
             const tickets = STATE.currentUser.role === "admin" ? DB.tickets : DB.tickets.filter(ticket => ticket.userId === STATE.currentUser.id);
             container.innerHTML = `
@@ -1465,7 +1665,11 @@ Imzo: __
         }
 
 
-        function openProductForm(id = null) {
+        function openProductForm(id = null, contractAccepted = false) {
+            if (!id && !contractAccepted && !STATE.productContractAccepted) {
+                openSellerProductContractModal();
+                return;
+            }
             STATE.editingProductId = id;
             const product = id ? productById(id) : null;
             const categoryValue = product?.category || DB.categories[0]?.value || "other";
@@ -1547,6 +1751,10 @@ Imzo: __
                 showToast("Mahsulot nomi va narxni to'g'ri kiriting", "warning");
                 return;
             }
+            if (!STATE.editingProductId && !STATE.productContractAccepted) {
+                openSellerProductContractModal();
+                return;
+            }
             
             const file = document.getElementById("p-image-file").files[0];
             const formData = new FormData();
@@ -1555,6 +1763,7 @@ Imzo: __
             formData.append("category", category);
             formData.append("region", region);
             formData.append("model", model);
+            if (!STATE.editingProductId) formData.append("accepted_contract", "1");
             
             if (file) formData.append("image", file);
             if (STATE.editingProductId) formData.append("id", STATE.editingProductId);
@@ -1563,6 +1772,7 @@ Imzo: __
                 await apiFetch('api/seller/products.php', 'POST', formData, true);
                 await refreshDB();
                 closeModal();
+                STATE.productContractAccepted = false;
                 showToast("Mahsulot saqlandi", "success");
                 renderCurrentView();
             } catch (e) {
@@ -1613,8 +1823,12 @@ Imzo: __
             renderBuyerCart(document.getElementById("view-area"));
         }
 
-        async function checkout() {
+        async function checkout(contractAccepted = false) {
             if (!DB.cart.length) return;
+            if (!contractAccepted && !STATE.buyerContractAccepted) {
+                openBuyerPurchaseContractModal();
+                return;
+            }
             const grouped = DB.cart.reduce((acc, item) => {
                 const product = productById(item.prodId);
                 if (!product) return acc;
@@ -1636,12 +1850,14 @@ Imzo: __
                         action: 'create_order',
                         sellerId,
                         total,
-                        items: formattedItems
+                        items: formattedItems,
+                        accepted_contract: true
                     });
                 }
                 
                 DB.cart = [];
                 saveCart();
+                STATE.buyerContractAccepted = false;
                 await refreshDB();
                 showToast("Buyurtma sotuvchiga yuborildi", "success");
                 navigate("buyer-orders");

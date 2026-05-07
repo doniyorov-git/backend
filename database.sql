@@ -3,6 +3,7 @@ USE mydilleruz;
 
 DROP TABLE IF EXISTS reports;
 DROP TABLE IF EXISTS notifications;
+DROP TABLE IF EXISTS contracts;
 DROP TABLE IF EXISTS ticket_replies;
 DROP TABLE IF EXISTS tickets;
 DROP TABLE IF EXISTS order_items;
@@ -79,6 +80,28 @@ CREATE TABLE IF NOT EXISTS order_items (
     price DECIMAL(15,2) NOT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS contracts (
+    id VARCHAR(50) PRIMARY KEY,
+    contract_type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    signer_user_id VARCHAR(50) NOT NULL,
+    counterparty_user_id VARCHAR(50),
+    product_id VARCHAR(50),
+    order_id VARCHAR(50),
+    document_text LONGTEXT NOT NULL,
+    signer_snapshot LONGTEXT,
+    counterparty_snapshot LONGTEXT,
+    signed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_contracts_signer (signer_user_id, signed_at),
+    INDEX idx_contracts_counterparty (counterparty_user_id, signed_at),
+    INDEX idx_contracts_related (product_id, order_id),
+    FOREIGN KEY (signer_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (counterparty_user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS reports (
