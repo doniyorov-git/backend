@@ -26,7 +26,7 @@ if (!$stmt->fetch()) {
 if ($action === 'update_password') {
     $password = trim($data['password'] ?? '');
     if (strlen($password) < 4) {
-        sendJson(['success' => false, 'message' => 'Parol kamida 4 belgidan iborat bo'lishi kerak'], 400);
+        sendJson(['success' => false, 'message' => "Parol kamida 4 belgidan iborat bo'lishi kerak"], 400);
     }
 
     $update = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
@@ -36,7 +36,7 @@ if ($action === 'update_password') {
     $mfo = preg_replace('/\D/', '', $data['mfo'] ?? '');
 
     if (strlen($bankAccount) !== 20 || strlen($mfo) !== 5) {
-        sendJson(['success' => false, 'message' => 'Hisob raqam 20 ta, MFO 5 ta raqam bo'lishi kerak'], 400);
+        sendJson(['success' => false, 'message' => "Hisob raqam 20 ta, MFO 5 ta raqam bo'lishi kerak"], 400);
     }
 
     $update = $pdo->prepare("UPDATE users SET bank_account = ?, mfo = ? WHERE id = ?");
