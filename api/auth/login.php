@@ -11,10 +11,6 @@ if (empty($data['phone']) || empty($data['password'])) {
     sendJson(['success' => false, 'message' => 'Telefon va parol kiritilishi shart'], 400);
 }
 
-if (empty($data['contract_accepted'])) {
-    sendJson(['success' => false, 'message' => 'Shartnomaga rozilik talab qilinadi'], 400);
-}
-
 $phone = preg_replace('/\D/', '', $data['phone']);
 if (strlen($phone) === 9) {
     $phone = '998' . $phone;
@@ -31,7 +27,6 @@ if ($user && $password === $user['password']) {
     }
     
     unset($user['password']);
-    recordContractSignature($pdo, 'platform_terms', $user['id'], null, ['source' => $data['contract_source'] ?? 'login']);
     $_SESSION['user'] = $user;
     
     sendJson(['success' => true, 'user' => $user]);
