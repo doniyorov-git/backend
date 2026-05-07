@@ -100,6 +100,26 @@ function ensureAppSchema(PDO $pdo) {
         ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
     ");
 
+    $stmt = $pdo->query("SHOW TABLES LIKE 'users'");
+    if ($stmt->fetchColumn()) {
+        $columns = [
+            'bank_account' => "ALTER TABLE users ADD COLUMN bank_account VARCHAR(50) NULL AFTER status",
+            'mfo' => "ALTER TABLE users ADD COLUMN mfo VARCHAR(10) NULL AFTER bank_account"
+        ];
+
+        foreach ($columns as $column => $sql) {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = ?
+            ");
+            $stmt->execute([$column]);
+            if ((int) $stmt->fetchColumn() === 0) {
+                $pdo->exec($sql);
+            }
+        }
+    }
+
     $stmt = $pdo->query("SHOW TABLES LIKE 'products'");
     if (!$stmt->fetchColumn()) {
         return;
