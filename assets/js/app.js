@@ -578,18 +578,19 @@ Imzo: __
                 </button>
             `).join("");
             const mobileHtml = menu.map(item => `
-                <button class="mobile-menu-option" data-view="${item.id}" onclick="navigate('${item.id}');toggleMobileMenu(false)" aria-label="${escapeHtml(item.title)}" title="${escapeHtml(item.title)}">
+                <button class="mobile-nav-item" data-view="${item.id}" onclick="navigate('${item.id}')" aria-label="${escapeHtml(item.title)}" title="${escapeHtml(item.title)}">
                     <i class="${item.icon}"></i>
                 </button>
             `).join("");
             document.getElementById("sidebar-menu").innerHTML = html;
-            document.getElementById("mobile-menu-dropdown").innerHTML = mobileHtml;
+            const mobileNav = document.getElementById("mobile-bottom-nav");
+            if (mobileNav) mobileNav.innerHTML = mobileHtml;
         }
 
         function toggleMobileMenu(force) {
-            const dropdown = document.getElementById("mobile-menu-dropdown");
-            if (!dropdown) return;
-            dropdown.classList.toggle("open", typeof force === "boolean" ? force : !dropdown.classList.contains("open"));
+            const mobileNav = document.getElementById("mobile-bottom-nav");
+            if (!mobileNav) return;
+            mobileNav.classList.toggle("open", typeof force === "boolean" ? force : !mobileNav.classList.contains("open"));
         }
 
         function notificationIcon(type) {
@@ -627,6 +628,7 @@ Imzo: __
 
         function toggleNotifications(event) {
             event?.stopPropagation();
+            toggleMobileMenu(false);
             document.getElementById("notification-dropdown")?.classList.toggle("open");
         }
 
