@@ -755,6 +755,143 @@
             color: var(--muted);
         }
 
+        .profile-wrapper {
+            position: relative;
+        }
+
+        .profile-trigger {
+            min-height: 46px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.65rem;
+            padding: 0.25rem 0.35rem 0.25rem 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: #ffffff;
+            color: var(--text);
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+        }
+
+        .profile-trigger:hover {
+            border-color: rgba(13, 148, 136, 0.45);
+            color: var(--primary);
+        }
+
+        .profile-summary {
+            display: grid;
+            line-height: 1.2;
+        }
+
+        .profile-summary span {
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .profile-dropdown {
+            position: absolute;
+            top: calc(100% + 0.65rem);
+            right: 0;
+            width: min(340px, calc(100vw - 2rem));
+            display: none;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: white;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            z-index: 45;
+        }
+
+        .profile-dropdown.open {
+            display: block;
+        }
+
+        .profile-dropdown-head {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 0.75rem;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(135deg, #f0fdfa, #ffffff);
+        }
+
+        .profile-dropdown-head b,
+        .profile-dropdown-head small {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .profile-dropdown-head small {
+            margin-top: 0.18rem;
+            color: var(--muted);
+            font-size: 0.75rem;
+        }
+
+        .profile-back {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--primary);
+        }
+
+        .profile-menu-list,
+        .profile-form {
+            display: grid;
+            gap: 0.65rem;
+            padding: 0.85rem;
+        }
+
+        .profile-menu-btn {
+            width: 100%;
+            min-height: 44px;
+            display: grid;
+            grid-template-columns: 36px minmax(0, 1fr);
+            align-items: center;
+            gap: 0.65rem;
+            padding: 0.55rem 0.7rem;
+            border-radius: 14px;
+            color: var(--text);
+            text-align: left;
+        }
+
+        .profile-menu-btn:hover {
+            background: #f0fdfa;
+            color: var(--primary);
+        }
+
+        .profile-menu-btn i {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #f8fafc;
+            color: var(--primary);
+        }
+
+        .profile-menu-btn span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 800;
+        }
+
+        .profile-menu-btn.danger,
+        .profile-menu-btn.danger i {
+            color: var(--danger);
+        }
+
         .avatar {
             width: 43px;
             height: 43px;
@@ -1030,6 +1167,36 @@
 
         .report-card.done {
             border-color: #bbf7d0;
+        }
+
+        .ticket-title-row,
+        .ticket-reply-head {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 0.65rem;
+        }
+
+        .ticket-title-row b,
+        .ticket-reply-head b {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ticket-owner {
+            min-width: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .ticket-owner span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .report-thumb {

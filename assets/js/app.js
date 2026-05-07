@@ -216,6 +216,24 @@ const STORAGE_KEY = "myDillerUzStateV2";
         const phoneDigits = value => String(value || "").replace(/\D/g, "").slice(0, 9);
         const fullPhone = value => "+998" + phoneDigits(value);
 
+        function normalizeUser(user) {
+            if (!user) return null;
+            return {
+                ...user,
+                bankAccount: user.bank_account ?? user.bankAccount ?? "",
+                bankMfo: user.mfo ?? user.bankMfo ?? ""
+            };
+        }
+
+        function setCurrentUser(user) {
+            STATE.currentUser = normalizeUser(user);
+            if (STATE.currentUser) {
+                localStorage.setItem(SESSION_KEY, JSON.stringify(STATE.currentUser));
+            } else {
+                localStorage.removeItem(SESSION_KEY);
+            }
+        }
+
         function formatDateTime(value) {
             const raw = String(value || "").trim();
             const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
@@ -463,8 +481,7 @@ Imzo: __
                 
                 const res = await apiFetch('api/auth/login.php', 'POST', { phone, password });
                 if (res.success) {
-                    STATE.currentUser = res.user;
-                    localStorage.setItem(SESSION_KEY, JSON.stringify(res.user));
+                    setCurrentUser(res.user);
                     showToast("Tizimga kirdingiz", "success");
                     setTimeout(() => window.location.href = dashboardUrl(res.user.role), 300);
                 }
@@ -511,8 +528,7 @@ Imzo: __
                 });
                 
                 if (res.success) {
-                    STATE.currentUser = res.user;
-                    localStorage.setItem(SESSION_KEY, JSON.stringify(res.user));
+                    setCurrentUser(res.user);
                     showToast("Muvaffaqiyatli ro'yxatdan o'tdingiz", "success");
                     setTimeout(() => window.location.href = dashboardUrl(res.user.role), 300);
                 }
@@ -530,13 +546,123 @@ Imzo: __
             try {
                 await apiFetch('api/auth/logout.php', 'POST');
             } catch(e) {}
-            STATE.currentUser = null;
-            localStorage.removeItem(SESSION_KEY);
+            setCurrentUser(null);
             window.location.href = authUrl();
         }
 
+        function profileValue(key) {
+            return STATE.currentUser?.[key] || "";
+        }
+
+        function renderProfileMenu(panel = "menu") {
+            const dropdown = document.getElementById("profile-dropdown");
+            if (!dropdown || !STATE.currentUser) return;
+
+            const bankAccount = profileValue("bankAccount");
+            const bankMfo = profileValue("bankMfo");
+            const bankAction = STATE.currentUser.role !== "admin"
+                ? `<button class="profile-menu-btn" onclick="renderProfileMenu('bank')"><i class="ri-bank-card-line"></i><span>Bank rekvizitlari</span></button>`
+                : "";
+
+            if (panel === "password") {
+                dropdown.innerHTML = `
+                    <div class="profile-dropdown-head">
+                        <button class="profile-back" onclick="renderProfileMenu('menu')" title="Orqaga"><i class="ri-arrow-left-line"></i></button>
+                        <div><b>Parolni almashtirish</b><small>Yangi parol kamida 4 ta belgi bo'lsin</small></div>
+                    </div>
+                    <div class="profile-form">
+                        <input class="input-control" type="password" id="profile-current-password" placeholder="Joriy parol">
+                        <input class="input-control" type="password" id="profile-new-password" placeholder="Yangi parol">
+                        <button class="btn btn-primary w-full" onclick="updateProfilePassword()">Saqlash</button>
+                    </div>`;
+                return;
+            }
+
+            if (panel === "bank") {
+                dropdown.innerHTML = `
+                    <div class="profile-dropdown-head">
+                        <button class="profile-back" onclick="renderProfileMenu('menu')" title="Orqaga"><i class="ri-arrow-left-line"></i></button>
+                        <div><b>Bank rekvizitlari</b><small>Hisob raqam va MFOni yangilang</small></div>
+                    </div>
+                    <div class="profile-form">
+                        <input class="input-control" id="profile-bank-account" inputmode="numeric" maxlength="20" value="${escapeHtml(bankAccount)}" placeholder="20 xonali hisob raqam">
+                        <input class="input-control" id="profile-bank-mfo" inputmode="numeric" maxlength="5" value="${escapeHtml(bankMfo)}" placeholder="5 xonali MFO">
+                        <button class="btn btn-primary w-full" onclick="updateProfileBank()">Saqlash</button>
+                    </div>`;
+                return;
+            }
+
+            dropdown.innerHTML = `
+                <div class="profile-dropdown-head">
+                    <span class="avatar">${escapeHtml((STATE.currentUser.name || "U").charAt(0).toUpperCase())}</span>
+                    <div>
+                        <b>${escapeHtml(STATE.currentUser.name || "Foydalanuvchi")}</b>
+                        <small>${escapeHtml(roleLabel(STATE.currentUser.role))} · ${escapeHtml(STATE.currentUser.phone || "")}</small>
+                    </div>
+                </div>
+                <div class="profile-menu-list">
+                    <button class="profile-menu-btn" onclick="renderProfileMenu('password')"><i class="ri-lock-password-line"></i><span>Parolni almashtirish</span></button>
+                    ${bankAction}
+                    <button class="profile-menu-btn danger" onclick="doLogout()"><i class="ri-logout-box-r-line"></i><span>Chiqish</span></button>
+                </div>`;
+        }
+
+        function toggleProfileMenu(event) {
+            event?.stopPropagation();
+            toggleMobileMenu(false);
+            document.getElementById("notification-dropdown")?.classList.remove("open");
+            renderProfileMenu("menu");
+            document.getElementById("profile-dropdown")?.classList.toggle("open");
+        }
+
+        async function updateProfilePassword() {
+            const currentPassword = document.getElementById("profile-current-password")?.value.trim();
+            const newPassword = document.getElementById("profile-new-password")?.value.trim();
+            if (!currentPassword || !newPassword || newPassword.length < 4) {
+                showToast("Joriy parol va yangi parolni to'g'ri kiriting", "warning");
+                return;
+            }
+
+            try {
+                const res = await apiFetch('api/auth/profile.php', 'POST', {
+                    action: 'password',
+                    current_password: currentPassword,
+                    new_password: newPassword
+                });
+                setCurrentUser(res.user);
+                renderProfileMenu("menu");
+                showToast("Parol yangilandi", "success");
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+        }
+
+        async function updateProfileBank() {
+            const bankAccount = document.getElementById("profile-bank-account")?.value.replace(/\D/g, "");
+            const bankMfo = document.getElementById("profile-bank-mfo")?.value.replace(/\D/g, "");
+            if (!bankAccount || bankAccount.length !== 20 || !bankMfo || bankMfo.length !== 5) {
+                showToast("Hisob raqam 20 ta, MFO 5 ta raqam bo'lishi kerak", "warning");
+                return;
+            }
+
+            try {
+                const res = await apiFetch('api/auth/profile.php', 'POST', {
+                    action: 'bank',
+                    bank_account: bankAccount,
+                    mfo: bankMfo
+                });
+                setCurrentUser(res.user);
+                const nameEl = document.getElementById("topbar-user-name");
+                if (nameEl) nameEl.textContent = STATE.currentUser.name;
+                renderProfileMenu("menu");
+                showToast("Bank rekvizitlari yangilandi", "success");
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+        }
+
         async function initApp() {
-            STATE.currentUser = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+            setCurrentUser(JSON.parse(localStorage.getItem(SESSION_KEY) || "null"));
             
             if (PAGE_TYPE === "auth") {
                 document.getElementById("auth-layout")?.classList.remove("hidden");
@@ -560,6 +686,7 @@ Imzo: __
                 if (roleEl) roleEl.textContent = roleLabel(STATE.currentUser.role);
                 const avatarEl = document.getElementById("topbar-avatar");
                 if (avatarEl && STATE.currentUser.name) avatarEl.textContent = STATE.currentUser.name.charAt(0).toUpperCase();
+                renderProfileMenu();
                 
                 renderMenus();
                 
@@ -1742,15 +1869,15 @@ Imzo: __
         function ticketCard(ticket) {
             const createdAt = formatDateTime(ticket.createdAt);
             return `<div class="report-card">
-                <div class="flex justify-between items-center gap-2"><b>${escapeHtml(ticket.subject)}</b>${statusBadge(ticket.status)}</div>
-                <div class="text-sm text-muted">${escapeHtml(userById(ticket.userId).name)}</div>
+                <div class="ticket-title-row"><b title="${escapeHtml(ticket.subject)}">${escapeHtml(ticket.subject)}</b>${statusBadge(ticket.status)}</div>
+                <div class="ticket-owner text-sm text-muted" title="${escapeHtml(userById(ticket.userId).name)}"><i class="ri-user-3-line"></i><span>${escapeHtml(userById(ticket.userId).name)}</span></div>
                 <div class="text-xs text-muted"><i class="ri-time-line"></i> Ochilgan: ${escapeHtml(createdAt || "Sana ko'rsatilmagan")}</div>
                 <p>${escapeHtml(ticket.message)}</p>
                 <div class="flex gap-2"><input class="input-control" id="reply-${ticket.id}" placeholder="Javob yozish"><button class="btn btn-primary" onclick="replyTicket('${ticket.id}')">Javob</button></div>
                 ${(ticket.replies || []).map(reply => {
                     const replyCreatedAt = formatDateTime(reply.createdAt);
                     return `<div class="card" style="box-shadow:none;background:#f8fafc;padding:.75rem;">
-                        <div class="flex justify-between items-center gap-2"><b>${escapeHtml(reply.author)}</b><span class="text-xs text-muted">${escapeHtml(replyCreatedAt)}</span></div>
+                        <div class="ticket-reply-head"><b title="${escapeHtml(reply.author)}">${escapeHtml(reply.author)}</b><span class="text-xs text-muted">${escapeHtml(replyCreatedAt)}</span></div>
                         <div class="text-sm text-muted">${escapeHtml(reply.text)}</div>
                     </div>`;
                 }).join("")}
@@ -1784,6 +1911,7 @@ Imzo: __
             document.addEventListener("click", event => {
                 if (!event.target.closest(".topbar-left")) toggleMobileMenu(false);
                 if (!event.target.closest(".notification-wrapper")) document.getElementById("notification-dropdown")?.classList.remove("open");
+                if (!event.target.closest(".profile-wrapper")) document.getElementById("profile-dropdown")?.classList.remove("open");
             });
             initApp();
         });

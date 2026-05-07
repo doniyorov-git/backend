@@ -45,6 +45,7 @@ Sotuvchi va dilerlar tizimga ro'yxatdan o'tish orqali qo'shiladi. Mahsulotlar ka
 ### Authentication
 - `POST /api/auth/login.php` - Kirish
 - `POST /api/auth/register.php` - Ro'yxatdan o'tish
+- `POST /api/auth/profile.php` - Parol yoki bank rekvizitlarini yangilash
 - `POST /api/auth/logout.php` - Chiqish
 - `GET /api/auth/me.php` - Joriy foydalanuvchi ma'lumoti
 
