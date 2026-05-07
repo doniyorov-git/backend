@@ -144,7 +144,15 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 const mapOrderItem = item => ({ ...item, prodId: item.product_id || item.prodId, qty: Number(item.quantity || item.qty || 0), price: Number(item.price || 0) });
                 const mapOrder = o => ({ ...o, buyerId: o.buyer_id, sellerId: o.seller_id, commStatus: o.comm_status, dispatchReport: o.dispatch_report, createdAt: o.created_at, updatedAt: o.updated_at, items: (o.items || []).map(mapOrderItem) });
                 const mapReport = r => ({ ...r, sellerId: r.seller_id, orderId: r.order_id, prodId: r.prod_id, dueDate: r.due_date, createdAt: r.created_at });
-                const mapTicket = t => ({ ...t, userId: t.user_id, createdAt: t.created_at });
+                const mapTicket = t => ({
+                    ...t,
+                    userId: t.user_id,
+                    createdAt: t.created_at,
+                    replies: (t.replies || []).map(reply => ({
+                        ...reply,
+                        createdAt: reply.created_at || reply.createdAt || reply.date
+                    }))
+                });
                 const mapNotification = n => ({ ...n, isRead: Number(n.is_read) === 1, createdAt: n.created_at });
 
                 if (role === 'admin') {
@@ -207,6 +215,16 @@ const STORAGE_KEY = "myDillerUzStateV2";
         const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
         const phoneDigits = value => String(value || "").replace(/\D/g, "").slice(0, 9);
         const fullPhone = value => "+998" + phoneDigits(value);
+
+        function formatDateTime(value) {
+            const raw = String(value || "").trim();
+            const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+            if (match) {
+                const [, year, month, day, hour, minute] = match;
+                return `${day}.${month}.${year} ${hour}:${minute}`;
+            }
+            return raw;
+        }
 
         function formatPhoneInput(input) {
             const digits = phoneDigits(input.value);
@@ -505,22 +523,6 @@ Imzo: __
                     btn.disabled = false;
                     btn.innerHTML = "Yakunlash";
                 }
-            }
-        }
-
-        async function setupTestData() {
-            try {
-                const response = await apiFetch('api/test-data.php', 'POST');
-                if (response.success) {
-                    showToast("Test ma'lumotlar qo'shildi", "success");
-                    await refreshDB();
-                    navigate(STATE.currentView || MENU_CONFIG[STATE.currentUser.role]?.[0]?.id);
-                } else {
-                    showToast(response.message || "Xato yuz berdi", "error");
-                }
-            } catch (error) {
-                console.error("[v0] Setup error:", error);
-                showToast("Setup xatosi", "error");
             }
         }
 
@@ -896,9 +898,8 @@ Imzo: __
                 <div class="section-head">
                     <div>
                         <h2>Admin dashboard</h2>
-                        <p class="text-sm text-muted mt-2">Boshlang'ich demo ma'lumotlar bo'sh. Register, katalog va buyurtmalar orqali ma'lumot yig'iladi.</p>
+                        <p class="text-sm text-muted mt-2">Boshlang'ich ma'lumotlar bo'sh. Register, katalog va buyurtmalar orqali ma'lumot yig'iladi.</p>
                     </div>
-                    <button class="btn btn-outline" onclick="setupTestData()"><i class="ri-settings-3-line"></i> Test ma'lumot</button>
                 </div>
                 <div class="grid-cards mb-6">
                     ${statCard("ri-group-line", "Foydalanuvchilar", `${DB.users.length} ta`, "text-info")}
@@ -1739,12 +1740,20 @@ Imzo: __
         }
 
         function ticketCard(ticket) {
+            const createdAt = formatDateTime(ticket.createdAt);
             return `<div class="report-card">
                 <div class="flex justify-between items-center gap-2"><b>${escapeHtml(ticket.subject)}</b>${statusBadge(ticket.status)}</div>
                 <div class="text-sm text-muted">${escapeHtml(userById(ticket.userId).name)}</div>
+                <div class="text-xs text-muted"><i class="ri-time-line"></i> Ochilgan: ${escapeHtml(createdAt || "Sana ko'rsatilmagan")}</div>
                 <p>${escapeHtml(ticket.message)}</p>
                 <div class="flex gap-2"><input class="input-control" id="reply-${ticket.id}" placeholder="Javob yozish"><button class="btn btn-primary" onclick="replyTicket('${ticket.id}')">Javob</button></div>
-                ${(ticket.replies || []).map(reply => `<div class="card" style="box-shadow:none;background:#f8fafc;padding:.75rem;"><b>${escapeHtml(reply.author)}</b><div class="text-sm text-muted">${escapeHtml(reply.text)}</div></div>`).join("")}
+                ${(ticket.replies || []).map(reply => {
+                    const replyCreatedAt = formatDateTime(reply.createdAt);
+                    return `<div class="card" style="box-shadow:none;background:#f8fafc;padding:.75rem;">
+                        <div class="flex justify-between items-center gap-2"><b>${escapeHtml(reply.author)}</b><span class="text-xs text-muted">${escapeHtml(replyCreatedAt)}</span></div>
+                        <div class="text-sm text-muted">${escapeHtml(reply.text)}</div>
+                    </div>`;
+                }).join("")}
             </div>`;
         }
 
