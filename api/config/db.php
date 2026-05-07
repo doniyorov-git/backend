@@ -134,8 +134,8 @@ function appContractHeaderHtml($context = []) {
     ';
 }
 
-function appNextContractNumber(PDO $pdo) {
-    $year = date('Y');
+function appNextContractNumber(PDO $pdo, $year = null) {
+    $year = preg_match('/^\d{4}$/', (string) $year) ? (string) $year : date('Y');
     $stmt = $pdo->prepare("
         SELECT contract_number
         FROM contract_signatures
@@ -152,6 +152,23 @@ function appNextContractNumber(PDO $pdo) {
     }
 
     return sprintf('%s-%06d', $year, $sequence);
+}
+
+function appBackfillContractNumbers(PDO $pdo) {
+    $stmt = $pdo->query("
+        SELECT id, signed_at, created_at
+        FROM contract_signatures
+        WHERE contract_number IS NULL OR contract_number = ''
+        ORDER BY signed_at ASC, created_at ASC, id ASC
+    ");
+
+    $update = $pdo->prepare("UPDATE contract_signatures SET contract_number = ? WHERE id = ?");
+    foreach ($stmt->fetchAll() as $contract) {
+        $date = $contract['signed_at'] ?? $contract['created_at'] ?? null;
+        $timestamp = $date ? strtotime((string) $date) : time();
+        $number = appNextContractNumber($pdo, $timestamp ? date('Y', $timestamp) : date('Y'));
+        $update->execute([$number, $contract['id']]);
+    }
 }
 
 function appFetchUserParty(PDO $pdo, $userId) {
@@ -476,6 +493,7 @@ function ensureAppSchema(PDO $pdo) {
     if ((int) $stmt->fetchColumn() === 0) {
         $pdo->exec("ALTER TABLE contract_signatures ADD COLUMN contract_number VARCHAR(20) NULL UNIQUE AFTER id");
     }
+    appBackfillContractNumbers($pdo);
 
     $stmt = $pdo->query("SHOW TABLES LIKE 'users'");
     if ($stmt->fetchColumn()) {
