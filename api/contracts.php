@@ -12,7 +12,9 @@ $role = $user['role'] ?? '';
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     if ($role === 'admin') {
         $stmt = $pdo->query("
-            SELECT c.*,
+            SELECT c.id, c.contract_number, c.contract_type, c.title, c.signer_id, c.counterparty_id,
+                   c.product_id, c.order_id, c.source, c.content, c.signer_snapshot, c.counterparty_snapshot,
+                   c.ip_address, c.user_agent, c.signed_at, c.created_at,
                    s.name AS signer_name, s.role AS signer_role, s.inn AS signer_inn, s.phone AS signer_phone,
                    cp.name AS counterparty_name, cp.role AS counterparty_role, cp.inn AS counterparty_inn, cp.phone AS counterparty_phone,
                    p.name AS product_name, p.sku AS product_sku,
@@ -28,7 +30,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
 
     $stmt = $pdo->prepare("
-        SELECT c.*,
+        SELECT c.id, c.contract_number, c.contract_type, c.title, c.signer_id, c.counterparty_id,
+               c.product_id, c.order_id, c.source, c.content, c.signer_snapshot, c.counterparty_snapshot,
+               c.ip_address, c.user_agent, c.signed_at, c.created_at,
                s.name AS signer_name, s.role AS signer_role, s.inn AS signer_inn, s.phone AS signer_phone,
                cp.name AS counterparty_name, cp.role AS counterparty_role, cp.inn AS counterparty_inn, cp.phone AS counterparty_phone,
                p.name AS product_name, p.sku AS product_sku,
