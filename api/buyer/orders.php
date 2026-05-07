@@ -57,6 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             }
             
             $pdo->commit();
+            createNotification($pdo, $data['sellerId'], 'Yangi buyurtma', '#' . $orderId . ' buyurtma qabul qilindi.', 'info', 'seller-orders');
+            notifyRole($pdo, 'admin', 'Yangi buyurtma', '#' . $orderId . ' buyurtma yaratildi.', 'info', 'admin-orders');
             sendJson(['success' => true, 'order_id' => $orderId]);
         } catch (Exception $e) {
             $pdo->rollBack();
@@ -73,6 +75,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if ($data['status'] === 'paid') { // legacy logic mapping
             $stmt = $pdo->prepare("UPDATE orders SET comm_status = 'paid' WHERE id = ?");
             $stmt->execute([$data['id']]);
+        }
+
+        $stmt = $pdo->prepare("SELECT seller_id FROM orders WHERE id = ? AND buyer_id = ?");
+        $stmt->execute([$data['id'], $buyerId]);
+        $sellerId = $stmt->fetchColumn();
+        if ($sellerId) {
+            createNotification($pdo, $sellerId, 'Buyurtma holati yangilandi', '#' . $data['id'] . ' buyurtma holati: ' . $data['status'], 'info', 'seller-orders');
         }
         
         sendJson(['success' => true]);

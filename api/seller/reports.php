@@ -15,23 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $note = $_POST['note'] ?? '';
     
     if ($reportId) {
-        $fileUrl = '';
-        if (isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
-            $tmpName = $_FILES['file']['tmp_name'];
-            $ext = pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION);
-            $filename = uniqid('rep_') . '.' . $ext;
-            $uploadDir = dirname(__DIR__) . '/uploads/reports/';
-            
-            // Ensure directory exists
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
-            }
-            
-            $dest = $uploadDir . $filename;
-            if (move_uploaded_file($tmpName, $dest)) {
-                $fileUrl = 'uploads/reports/' . $filename;
-            }
-        }
+        $fileUrl = saveUploadedFile('file', 'reports', 'rep');
         
         if ($fileUrl) {
             $stmt = $pdo->prepare("UPDATE reports SET image = ?, note = ?, status = 'done' WHERE id = ? AND seller_id = ?");

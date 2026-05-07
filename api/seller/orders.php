@@ -44,13 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     $dispatchReport = null;
     if ($status === 'dispatched' && isset($_FILES['dispatch_report']) && $_FILES['dispatch_report']['error'] === UPLOAD_ERR_OK) {
-        $tmpName = $_FILES['dispatch_report']['tmp_name'];
-        $ext = pathinfo($_FILES['dispatch_report']['name'], PATHINFO_EXTENSION);
-        $filename = uniqid('rep_') . '.' . $ext;
-        $dest = '../../uploads/reports/' . $filename;
-        if (move_uploaded_file($tmpName, $dest)) {
-            $dispatchReport = 'uploads/reports/' . $filename;
-        }
+        $dispatchReport = saveUploadedFile('dispatch_report', 'reports', 'rep');
     }
     
     if ($dispatchReport) {
@@ -63,7 +57,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if ($status === 'seller_paid_comm') {
             $stmt = $pdo->prepare("UPDATE orders SET comm_status = 'pending_admin' WHERE id = ? AND seller_id = ?");
             $stmt->execute([$orderId, $sellerId]);
+            notifyRole($pdo, 'admin', 'Komissiya tasdiq kutmoqda', '#' . $orderId . ' buyurtma komissiyasi tekshiruvga yuborildi.', 'warning', 'admin-comm');
         }
+    }
+
+    $stmt = $pdo->prepare("SELECT buyer_id FROM orders WHERE id = ? AND seller_id = ?");
+    $stmt->execute([$orderId, $sellerId]);
+    $buyerId = $stmt->fetchColumn();
+    if ($buyerId) {
+        createNotification($pdo, $buyerId, 'Buyurtma holati yangilandi', '#' . $orderId . ' buyurtma holati: ' . $status, 'info', 'buyer-orders');
     }
     
     sendJson(['success' => true]);

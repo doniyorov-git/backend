@@ -1,6 +1,5 @@
 <?php
 // Test data insertion script
-session_start();
 require_once 'config/db.php';
 
 // Allow POST requests
@@ -38,7 +37,7 @@ try {
             'id' => 'p_test1',
             'seller_id' => 'u_seller1',
             'name' => 'Kompyuter Monitori',
-            'sku' => 'MON-001',
+            'sku' => 'RDP-001',
             'category' => 'electronics',
             'price' => 500000,
             'region' => 'Toshkent shahri',
@@ -49,7 +48,7 @@ try {
             'id' => 'p_test2',
             'seller_id' => 'u_seller1',
             'name' => 'Ofis Stoli',
-            'sku' => 'DSK-001',
+            'sku' => 'RDP-002',
             'category' => 'furniture',
             'price' => 1000000,
             'region' => 'Toshkent viloyati',
@@ -60,7 +59,7 @@ try {
             'id' => 'p_test3',
             'seller_id' => 'u_seller2',
             'name' => 'Qurilish Mixi',
-            'sku' => 'BLD-001',
+            'sku' => 'RDP-003',
             'category' => 'building',
             'price' => 250000,
             'region' => 'Samarqand',
@@ -73,7 +72,7 @@ try {
         $stmt = $pdo->prepare("SELECT id FROM products WHERE id = ?");
         $stmt->execute([$product['id']]);
         if (!$stmt->fetch()) {
-            $stmt2 = $pdo->prepare("INSERT INTO products (id, seller_id, name, sku, category, price, region, model, image, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')");
+            $stmt2 = $pdo->prepare("INSERT INTO products (id, seller_id, name, sku, category, price, region, model, image, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved')");
             $stmt2->execute([
                 $product['id'],
                 $product['seller_id'],

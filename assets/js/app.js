@@ -74,6 +74,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 { id: "admin-users", icon: "ri-group-line", title: "Foydalanuvchilar" },
                 { id: "admin-orders", icon: "ri-file-list-3-line", title: "Buyurtmalar" },
                 { id: "admin-products", icon: "ri-store-2-line", title: "Mahsulotlar" },
+                { id: "admin-moderation", icon: "ri-shield-check-line", title: "Moderatsiya" },
                 { id: "admin-comm", icon: "ri-money-dollar-circle-line", title: "Komissiya" },
                 { id: "admin-reports", icon: "ri-camera-lens-line", title: "Foto Hisobotlar" },
                 { id: "tickets", icon: "ri-scales-3-line", title: "Yordam" }
@@ -95,7 +96,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         };
 
         const DB = {
-            users: [], products: [], orders: [], reports: [], tickets: [], categories: DEFAULT_CATEGORIES,
+            users: [], products: [], orders: [], reports: [], tickets: [], notifications: [], categories: DEFAULT_CATEGORIES,
             cart: JSON.parse(localStorage.getItem(STORAGE_KEY + "_cart") || "[]")
         };
         const STATE = {
@@ -139,43 +140,52 @@ const STORAGE_KEY = "myDillerUzStateV2";
             try {
                 const role = STATE.currentUser.role;
                 const mapUser = u => ({ ...u, bankAccount: u.bank_account, bankMfo: u.mfo });
-                const mapProduct = p => ({ ...p, sellerId: p.seller_id, viewCount: p.view_count, createdAt: p.created_at });
-                const mapOrder = o => ({ ...o, buyerId: o.buyer_id, sellerId: o.seller_id, commStatus: o.comm_status, dispatchReport: o.dispatch_report, createdAt: o.created_at, updatedAt: o.updated_at });
+                const mapProduct = p => ({ ...p, sellerId: p.seller_id, sellerName: p.seller_name, sellerPhone: p.seller_phone, moderationNote: p.moderation_note, moderatedAt: p.moderated_at, viewCount: p.view_count, createdAt: p.created_at });
+                const mapOrderItem = item => ({ ...item, prodId: item.product_id || item.prodId, qty: Number(item.quantity || item.qty || 0), price: Number(item.price || 0) });
+                const mapOrder = o => ({ ...o, buyerId: o.buyer_id, sellerId: o.seller_id, commStatus: o.comm_status, dispatchReport: o.dispatch_report, createdAt: o.created_at, updatedAt: o.updated_at, items: (o.items || []).map(mapOrderItem) });
                 const mapReport = r => ({ ...r, sellerId: r.seller_id, orderId: r.order_id, prodId: r.prod_id, dueDate: r.due_date, createdAt: r.created_at });
                 const mapTicket = t => ({ ...t, userId: t.user_id, createdAt: t.created_at });
+                const mapNotification = n => ({ ...n, isRead: Number(n.is_read) === 1, createdAt: n.created_at });
 
                 if (role === 'admin') {
-                    const [usersRes, dashRes, prodRes, tickRes] = await Promise.all([
+                    const [usersRes, dashRes, prodRes, tickRes, notifRes] = await Promise.all([
                         apiFetch('api/admin/users.php'),
                         apiFetch('api/admin/dashboard.php'),
                         apiFetch('api/admin/products.php'),
-                        apiFetch('api/tickets.php')
+                        apiFetch('api/tickets.php'),
+                        apiFetch('api/notifications.php')
                     ]);
                     DB.users = (usersRes.data || []).map(mapUser);
                     DB.orders = (dashRes.data || []).map(mapOrder);
                     DB.products = (prodRes.data || []).map(mapProduct);
                     DB.tickets = (tickRes.data || []).map(mapTicket);
+                    DB.notifications = (notifRes.data || []).map(mapNotification);
                 } else if (role === 'seller') {
-                    const [prodRes, orderRes, repRes, tickRes] = await Promise.all([
+                    const [prodRes, orderRes, repRes, tickRes, notifRes] = await Promise.all([
                         apiFetch('api/seller/products.php'),
                         apiFetch('api/seller/orders.php'),
                         apiFetch('api/seller/reports.php'),
-                        apiFetch('api/tickets.php')
+                        apiFetch('api/tickets.php'),
+                        apiFetch('api/notifications.php')
                     ]);
                     DB.products = (prodRes.data || []).map(mapProduct);
                     DB.orders = (orderRes.data || []).map(mapOrder);
                     DB.reports = (repRes.data || []).map(mapReport);
                     DB.tickets = (tickRes.data || []).map(mapTicket);
+                    DB.notifications = (notifRes.data || []).map(mapNotification);
                 } else if (role === 'buyer') {
-                    const [prodRes, orderRes, tickRes] = await Promise.all([
+                    const [prodRes, orderRes, tickRes, notifRes] = await Promise.all([
                         apiFetch('api/buyer/products.php'),
                         apiFetch('api/buyer/orders.php'),
-                        apiFetch('api/tickets.php')
+                        apiFetch('api/tickets.php'),
+                        apiFetch('api/notifications.php')
                     ]);
                     DB.products = (prodRes.data || []).map(mapProduct);
                     DB.orders = (orderRes.data || []).map(mapOrder);
                     DB.tickets = (tickRes.data || []).map(mapTicket);
+                    DB.notifications = (notifRes.data || []).map(mapNotification);
                 }
+                renderNotificationBell();
             } catch (e) {
                 console.error("Failed to refresh DB", e);
                 showToast("Ma'lumotlarni yuklashda xatolik: " + e.message, "danger");
@@ -184,6 +194,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
 
         function saveCart() {
             localStorage.setItem(STORAGE_KEY + "_cart", JSON.stringify(DB.cart));
+        }
+
+        function saveState() {
+            saveCart();
         }
 
         const money = amount => new Intl.NumberFormat("uz-UZ").format(Number(amount) || 0) + " UZS";
@@ -233,6 +247,9 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function statusBadge(status) {
             const map = {
                 active: ["Faol", "badge-active"],
+                approved: ["Tasdiqlangan", "badge-active"],
+                rejected: ["Rad etildi", "badge-danger"],
+                inactive: ["Nofaol", "badge-muted"],
                 blocked: ["Blok", "badge-danger"],
                 pending_seller_accept: ["Buyurtma berildi", "badge-warning"],
                 seller_accepted: ["Qabul qilindi", "badge-info"],
@@ -491,13 +508,13 @@ Imzo: __
             }
         }
 
-        async         async function setupTestData() {
+        async function setupTestData() {
             try {
                 const response = await apiFetch('api/test-data.php', 'POST');
                 if (response.success) {
                     showToast("Test ma'lumotlar qo'shildi", "success");
                     await refreshDB();
-                    navigate(STATE.currentPage);
+                    navigate(STATE.currentView || MENU_CONFIG[STATE.currentUser.role]?.[0]?.id);
                 } else {
                     showToast(response.message || "Xato yuz berdi", "error");
                 }
@@ -507,7 +524,7 @@ Imzo: __
             }
         }
 
-        function doLogout() {
+        async function doLogout() {
             try {
                 await apiFetch('api/auth/logout.php', 'POST');
             } catch(e) {}
@@ -561,8 +578,8 @@ Imzo: __
                 </button>
             `).join("");
             const mobileHtml = menu.map(item => `
-                <button class="mobile-menu-option" data-view="${item.id}" onclick="navigate('${item.id}');toggleMobileMenu(false)">
-                    <i class="${item.icon}"></i><span>${item.title}</span>
+                <button class="mobile-menu-option" data-view="${item.id}" onclick="navigate('${item.id}');toggleMobileMenu(false)" aria-label="${escapeHtml(item.title)}" title="${escapeHtml(item.title)}">
+                    <i class="${item.icon}"></i>
                 </button>
             `).join("");
             document.getElementById("sidebar-menu").innerHTML = html;
@@ -571,7 +588,71 @@ Imzo: __
 
         function toggleMobileMenu(force) {
             const dropdown = document.getElementById("mobile-menu-dropdown");
+            if (!dropdown) return;
             dropdown.classList.toggle("open", typeof force === "boolean" ? force : !dropdown.classList.contains("open"));
+        }
+
+        function notificationIcon(type) {
+            return {
+                success: "ri-checkbox-circle-line",
+                danger: "ri-close-circle-line",
+                warning: "ri-error-warning-line",
+                info: "ri-information-line"
+            }[type] || "ri-notification-3-line";
+        }
+
+        function renderNotificationBell() {
+            const countEl = document.getElementById("notification-count");
+            const dropdown = document.getElementById("notification-dropdown");
+            if (!countEl || !dropdown) return;
+
+            const unread = DB.notifications.filter(item => !item.isRead).length;
+            countEl.textContent = unread > 9 ? "9+" : String(unread);
+            countEl.classList.toggle("hidden", unread === 0);
+
+            dropdown.innerHTML = `
+                <div class="notification-head">
+                    <b>Bildirishnomalar</b>
+                    <button onclick="markAllNotificationsRead()">O'qildi</button>
+                </div>
+                <div class="notification-list">
+                    ${DB.notifications.length ? DB.notifications.map(item => `
+                        <button class="notification-item ${item.isRead ? "" : "unread"}" onclick="openNotification('${item.id}', '${escapeHtml(item.link || "")}')">
+                            <i class="${notificationIcon(item.type)}"></i>
+                            <span><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.message)}</small></span>
+                        </button>
+                    `).join("") : `<div class="notification-empty">Yangi bildirishnoma yo'q</div>`}
+                </div>`;
+        }
+
+        function toggleNotifications(event) {
+            event?.stopPropagation();
+            document.getElementById("notification-dropdown")?.classList.toggle("open");
+        }
+
+        async function openNotification(id, link) {
+            try {
+                await apiFetch('api/notifications.php', 'POST', { action: 'mark_read', id });
+                const item = DB.notifications.find(notification => notification.id === id);
+                if (item) item.isRead = true;
+                renderNotificationBell();
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+            document.getElementById("notification-dropdown")?.classList.remove("open");
+            if (link && MENU_CONFIG[STATE.currentUser.role]?.some(item => item.id === link)) {
+                navigate(link);
+            }
+        }
+
+        async function markAllNotificationsRead() {
+            try {
+                await apiFetch('api/notifications.php', 'POST', { action: 'mark_all_read' });
+                DB.notifications = DB.notifications.map(item => ({ ...item, isRead: true }));
+                renderNotificationBell();
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
         }
 
         function navigate(viewId) {
@@ -590,6 +671,7 @@ Imzo: __
                 "admin-users": renderAdminUsers,
                 "admin-orders": renderAdminOrders,
                 "admin-products": renderAdminProducts,
+                "admin-moderation": renderAdminModeration,
                 "admin-comm": renderAdminComm,
                 "admin-reports": renderAdminReports,
                 "seller-dash": renderSellerDash,
@@ -814,7 +896,7 @@ Imzo: __
                         <h2>Admin dashboard</h2>
                         <p class="text-sm text-muted mt-2">Boshlang'ich demo ma'lumotlar bo'sh. Register, katalog va buyurtmalar orqali ma'lumot yig'iladi.</p>
                     </div>
-                    <button class="btn btn-danger" onclick="resetAllData()"><i class="ri-delete-bin-6-line"></i> Ma'lumotlarni tozalash</button>
+                    <button class="btn btn-outline" onclick="setupTestData()"><i class="ri-settings-3-line"></i> Test ma'lumot</button>
                 </div>
                 <div class="grid-cards mb-6">
                     ${statCard("ri-group-line", "Foydalanuvchilar", `${DB.users.length} ta`, "text-info")}
@@ -915,6 +997,39 @@ Imzo: __
                     ${productFilterHtml("products")}
                     ${products.length ? productGrid(products, false) : emptyHtml("ri-store-2-line", "Mahsulotlar hozircha yo'q")}
                 </div>`;
+        }
+
+        function renderAdminModeration(container) {
+            const products = DB.products.filter(product => ["pending", "rejected"].includes(product.status));
+            const pendingCount = products.filter(product => product.status === "pending").length;
+            container.innerHTML = `
+                <div class="card">
+                    <div class="section-head">
+                        <div>
+                            <h3>Mahsulot moderatsiyasi</h3>
+                            <p class="text-sm text-muted">${pendingCount} ta mahsulot tasdiq kutmoqda</p>
+                        </div>
+                    </div>
+                    ${products.length ? moderationTable(products) : emptyHtml("ri-shield-check-line", "Moderatsiya kutayotgan mahsulot yo'q")}
+                </div>`;
+        }
+
+        function moderationTable(products) {
+            return `<div class="table-responsive"><table>
+                <thead><tr><th>Mahsulot</th><th>Sotuvchi</th><th>SKU</th><th>Holat</th><th>Izoh</th><th>Amal</th></tr></thead>
+                <tbody>${products.map(product => `
+                    <tr>
+                        <td><b>${escapeHtml(product.name)}</b><div class="text-xs text-muted">${escapeHtml(categoryByValue(product.category).label)} · ${money(product.price)}</div></td>
+                        <td>${escapeHtml(product.sellerName || userById(product.sellerId).name)}</td>
+                        <td>${escapeHtml(product.sku)}</td>
+                        <td>${statusBadge(product.status)}</td>
+                        <td class="text-sm text-muted">${escapeHtml(product.moderationNote || "")}</td>
+                        <td><div class="flex gap-2">
+                            <button class="btn btn-success btn-icon" onclick="approveProduct('${product.id}')" title="Tasdiqlash"><i class="ri-check-line"></i></button>
+                            <button class="btn btn-danger btn-icon" onclick="openRejectProduct('${product.id}')" title="Rad etish"><i class="ri-close-line"></i></button>
+                        </div></td>
+                    </tr>`).join("")}</tbody>
+            </table></div>`;
         }
 
         function renderAdminComm(container) {
@@ -1108,14 +1223,16 @@ Imzo: __
             return `<div class="grid-products">${products.map(product => {
                 const category = categoryByValue(product.category);
                 const seller = userById(product.sellerId);
+                const sellerName = product.sellerName || product.seller_name || seller.name;
                 return `<div class="product-card">
                     <div class="product-img">${product.image ? `<img src="${imageUrl(product.image)}" alt="${escapeHtml(product.name)}">` : `<i class="${category.icon}"></i>`}</div>
                     <div class="product-info">
                         <div class="flex justify-between items-center gap-2"><span class="badge badge-info">${escapeHtml(category.label)}</span><span class="text-xs text-muted">${escapeHtml(product.sku)}</span></div>
+                        <div class="flex justify-between items-center gap-2">${statusBadge(product.status)}${product.status === "rejected" && product.moderationNote ? `<span class="text-xs text-danger">${escapeHtml(product.moderationNote)}</span>` : ""}</div>
                         <div class="product-title">${escapeHtml(product.name)}</div>
                         <div class="product-price">${money(product.price)}</div>
                         <div class="specs">
-                            <span><i class="ri-store-2-line"></i>${escapeHtml(seller.name)}</span>
+                            <span><i class="ri-store-2-line"></i>${escapeHtml(sellerName)}</span>
                             <span><i class="ri-map-pin-line"></i>${escapeHtml(product.region || "Tanlanmagan")}</span>
                             <span><i class="ri-refresh-line"></i>${product.model === "prepayment" ? `Oldindan to'lov ${product.prepayPercent || 0}%` : "Realizatsiya"}</span>
                             <span><i class="ri-camera-line"></i>Foto hisobot: har ${product.photoDays || 15} kun</span>
@@ -1133,7 +1250,7 @@ Imzo: __
                 <tbody>${orders.map(order => `<tr>
                     <td>#${order.id}</td>
                     <td><b>${escapeHtml(userById(order.sellerId).name)}</b><div class="text-xs text-muted">${escapeHtml(userById(order.buyerId).name)}</div></td>
-                    <td class="hide-sm">${escapeHtml(order.date)}</td>
+                    <td class="hide-sm">${escapeHtml(order.date || order.createdAt || "")}</td>
                     <td class="font-bold text-primary">${money(order.total)}</td>
                     <td>${statusBadge(order.status)}</td>
                     <td><button class="btn btn-outline btn-icon" onclick="openOrderDetails('${order.id}')"><i class="ri-eye-line"></i></button></td>
@@ -1175,10 +1292,8 @@ Imzo: __
             const categoryValue = product?.category || DB.categories[0]?.value || "other";
             const region = product?.region || REGION_OPTIONS[0];
             modal(product ? "Mahsulotni tahrirlash" : "Yangi mahsulot", `
-                <div class="grid-2">
-                    <div class="input-group"><label>SKU</label><input id="p-sku" class="input-control" value="${escapeHtml(product?.sku || "")}" placeholder="PRD-001"></div>
-                    <div class="input-group"><label>Mahsulot nomi</label><input id="p-name" class="input-control" value="${escapeHtml(product?.name || "")}" placeholder="Nom"></div>
-                </div>
+                ${product?.sku ? `<div class="input-group"><label>SKU</label><input class="input-control" value="${escapeHtml(product.sku)}" disabled></div>` : `<div class="text-sm text-muted mb-4"><i class="ri-barcode-line"></i> SKU avtomatik yaratiladi: RDP-001, RDP-002...</div>`}
+                <div class="input-group"><label>Mahsulot nomi</label><input id="p-name" class="input-control" value="${escapeHtml(product?.name || "")}" placeholder="Nom"></div>
                 <div class="grid-2">
                     <div class="input-group"><label>Kategoriya</label>${selectInline(categoryValue, categoryOptions(false), "")}</div>
                     <div class="input-group"><label>Yangi kategoriya</label><div class="flex gap-2"><input id="new-category" class="input-control" placeholder="Kategoriya qo'shish"><button class="btn btn-outline" onclick="addCategoryFromForm()">Qo'shish</button></div></div>
@@ -1244,14 +1359,13 @@ Imzo: __
         }
 
         async function saveProductForm() {
-            const sku = document.getElementById("p-sku").value.trim();
             const name = document.getElementById("p-name").value.trim();
             const price = Number(document.getElementById("p-price").value);
             const category = document.getElementById("p-category").value;
             const region = document.getElementById("p-region").value;
             const model = document.getElementById("p-model").value;
-            if (!sku || !name || !price || price <= 0) {
-                showToast("SKU, nom va narxni to'g'ri kiriting", "warning");
+            if (!name || !price || price <= 0) {
+                showToast("Mahsulot nomi va narxni to'g'ri kiriting", "warning");
                 return;
             }
             
@@ -1260,7 +1374,6 @@ Imzo: __
             formData.append("name", name);
             formData.append("price", price);
             formData.append("category", category);
-            formData.append("sku", sku);
             formData.append("region", region);
             formData.append("model", model);
             
@@ -1367,16 +1480,16 @@ Imzo: __
         function openOrderDetails(id) {
             const order = DB.orders.find(item => item.id === id);
             if (!order) return;
-            const items = order.items.map(item => {
+            const items = (order.items || []).map(item => {
                 const product = productById(item.prodId) || { name: "O'chirilgan mahsulot", price: 0 };
                 return `<div class="details-row"><span class="details-label">${escapeHtml(product.name)} x ${item.qty}</span><span class="details-value">${money(product.price * item.qty)}</span></div>`;
-            }).join("");
+            }).join("") || `<div class="text-sm text-muted">Mahsulotlar ro'yxati topilmadi</div>`;
             const actions = orderActions(order);
             modal(`Buyurtma #${order.id}`, `
                 <div class="details-list mb-4">
                     <div class="details-row"><span class="details-label">Sotuvchi:</span><span class="details-value">${escapeHtml(userById(order.sellerId).name)}</span></div>
                     <div class="details-row"><span class="details-label">Diler:</span><span class="details-value">${escapeHtml(userById(order.buyerId).name)}</span></div>
-                    <div class="details-row"><span class="details-label">Sana:</span><span class="details-value">${escapeHtml(order.date)}</span></div>
+                    <div class="details-row"><span class="details-label">Sana:</span><span class="details-value">${escapeHtml(order.date || order.createdAt || "")}</span></div>
                     <div class="details-row"><span class="details-label">Holat:</span><span class="details-value">${statusBadge(order.status)}</span></div>
                     <div class="details-row"><span class="details-label">Jami:</span><span class="details-value text-primary">${money(order.total)}</span></div>
                 </div>
@@ -1518,6 +1631,43 @@ Imzo: __
             }
         }
 
+        async function approveProduct(productId) {
+            try {
+                await apiFetch('api/admin/products.php', 'POST', { action: 'approve', id: productId });
+                await refreshDB();
+                showToast("Mahsulot tasdiqlandi", "success");
+                renderCurrentView();
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+        }
+
+        function openRejectProduct(productId) {
+            const product = productById(productId);
+            if (!product) return;
+            modal("Mahsulotni rad etish", `
+                <div class="input-group"><label>Mahsulot</label><input class="input-control" value="${escapeHtml(product.name)}" disabled></div>
+                <div class="input-group"><label>Rad etish sababi</label><textarea id="reject-note" class="input-control" rows="4" placeholder="Masalan: rasm sifati past yoki ma'lumot yetarli emas"></textarea></div>
+            `, `<button class="btn btn-outline" onclick="closeModal()">Bekor qilish</button><button class="btn btn-danger" onclick="rejectProduct('${productId}')">Rad etish</button>`);
+        }
+
+        async function rejectProduct(productId) {
+            const note = document.getElementById("reject-note")?.value.trim();
+            if (!note) {
+                showToast("Rad etish sababini yozing", "warning");
+                return;
+            }
+            try {
+                await apiFetch('api/admin/products.php', 'POST', { action: 'reject', id: productId, note });
+                await refreshDB();
+                closeModal();
+                showToast("Mahsulot rad etildi", "success");
+                renderCurrentView();
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+        }
+
         async function toggleUserStatus(userId, status) {
             try {
                 await apiFetch('api/admin/users.php', 'POST', { action: 'toggle_status', id: userId, status });
@@ -1622,6 +1772,7 @@ Imzo: __
             if (registerTerms) registerTerms.addEventListener("change", event => document.getElementById("register-btn").disabled = !event.target.checked);
             document.addEventListener("click", event => {
                 if (!event.target.closest(".topbar-left")) toggleMobileMenu(false);
+                if (!event.target.closest(".notification-wrapper")) document.getElementById("notification-dropdown")?.classList.remove("open");
             });
             initApp();
         });
