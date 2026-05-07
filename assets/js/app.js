@@ -514,7 +514,7 @@ Imzo: __
                 if (response.success) {
                     showToast("Test ma'lumotlar qo'shildi", "success");
                     await refreshDB();
-                    navigate(STATE.currentPage);
+                    navigate(STATE.currentView || MENU_CONFIG[STATE.currentUser.role]?.[0]?.id);
                 } else {
                     showToast(response.message || "Xato yuz berdi", "error");
                 }
