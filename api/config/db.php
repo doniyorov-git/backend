@@ -295,7 +295,7 @@ function appPlatformTermsContractHtml(PDO $pdo, $userId, $context = []) {
             <p>2.1. Platforma foydalanuvchiga kabinet, katalog, buyurtma, hisob-kitob, bildirishnoma va yordam servislaridan foydalanish imkonini beradi.</p>
             <p>2.2. Foydalanuvchi kiritilgan kompaniya, STIR, telefon va bank rekvizitlari to\'g\'riligiga shaxsan javob beradi.</p>
             <h4>3. ELEKTRON ROZILIK</h4>
-            <p>3.1. Login, ro\'yxatdan o\'tish yoki tegishli amaliyot vaqtida "Roziman" tugmasini bosish shartnomani elektron imzolash bilan teng kuchga ega.</p>
+            <p>3.1. Ro\'yxatdan o\'tish vaqtida "Roziman" tugmasini bosish shartnomani elektron imzolash bilan teng kuchga ega.</p>
             <p>3.2. Rozilik manbasi: ' . appEscape($source) . '.</p>
             <h4>4. MAXFIYLIK VA JAVOBGARLIK</h4>
             <p>4.1. Tomonlar shartnoma doirasida olingan tijorat, shaxsiy va moliyaviy ma\'lumotlarni uchinchi shaxslarga asossiz oshkor qilmaydi.</p>

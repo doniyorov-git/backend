@@ -32,17 +32,7 @@
                     <label>Parol</label>
                     <input type="password" id="login-password" class="input-control" placeholder="Parol">
                 </div>
-                <div class="terms-row">
-                    <input type="checkbox" id="login-terms" disabled
-                        onchange="document.getElementById('login-btn').disabled = !this.checked">
-                    <label for="login-terms" class="text-xs text-muted" style="cursor:pointer;"
-                        onclick="openContractModal(event, 'login')">
-                        <span style="color:var(--primary); text-decoration:underline;">Hamkorlik va xizmat
-                            ko'rsatish shartnomasi</span>, maxfiylik siyosati va platforma qoidalari bilan tanishdim
-                        hamda roziman
-                    </label>
-                </div>
-                <button class="btn btn-primary w-full" id="login-btn" disabled onclick="doLogin()">Kirish</button>
+                <button class="btn btn-primary w-full" id="login-btn" onclick="doLogin()">Kirish</button>
                 <div class="auth-switch">
                     Hisobingiz yo'qmi?
                     <button type="button" onclick="switchAuth('register')">Ro'yxatdan o'tish</button>
@@ -166,7 +156,7 @@
 
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="assets/js/app.js?v=17"></script>
+    <script src="assets/js/app.js?v=18"></script>
 </body>
 
 </html>

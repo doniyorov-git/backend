@@ -105,7 +105,6 @@ const STORAGE_KEY = "myDillerUzStateV2";
             currentUser: null,
             currentView: "",
             editingProductId: null,
-            contractTarget: "register",
             pendingProductFormData: null,
             filters: {
                 users: { search: "", role: "all", status: "all" },
@@ -458,7 +457,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 <p>2.1. Platforma kabinet, katalog, buyurtma, hisob-kitob, bildirishnoma va yordam servislaridan foydalanish imkonini beradi.</p>
                 <p>2.2. Foydalanuvchi kiritilgan kompaniya, STIR, telefon va bank rekvizitlari to'g'riligiga shaxsan javob beradi.</p>
                 <h4>3. ELEKTRON ROZILIK</h4>
-                <p>3.1. Login, ro'yxatdan o'tish yoki amaliyot vaqtida "Roziman" tugmasini bosish shartnomani elektron imzolash bilan teng kuchga ega.</p>
+                <p>3.1. Ro'yxatdan o'tish vaqtida "Roziman" tugmasini bosish shartnomani elektron imzolash bilan teng kuchga ega.</p>
                 <p>3.2. Rozilik manbasi: ${escapeHtml(source)}.</p>
                 <h4>4. MAXFIYLIK VA JAVOBGARLIK</h4>
                 <p>4.1. Tomonlar shartnoma doirasida olingan tijorat, shaxsiy va moliyaviy ma'lumotlarni uchinchi shaxslarga asossiz oshkor qilmaydi.</p>
@@ -531,18 +530,16 @@ const STORAGE_KEY = "myDillerUzStateV2";
 
         function openContractModal(e, target = "register") {
             e?.preventDefault();
-            STATE.contractTarget = target;
             modal("Platforma shartnomasi", platformContractHtml(target), `<button class="btn btn-outline" onclick="closeModal()">Yopish</button><button class="btn btn-primary" onclick="acceptContract()">Roziman</button>`);
         }
 
         function acceptContract() {
             closeModal();
-            const target = STATE.contractTarget === "login" ? "login" : "register";
-            const terms = document.getElementById(target === "login" ? "login-terms" : "register-terms");
+            const terms = document.getElementById("register-terms");
             if (terms) {
                 terms.disabled = false;
                 terms.checked = true;
-                const btn = document.getElementById(target === "login" ? "login-btn" : "register-btn");
+                const btn = document.getElementById("register-btn");
                 if (btn) btn.disabled = false;
             }
         }
@@ -550,12 +547,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
         async function doLogin() {
             const password = document.getElementById("login-password").value.trim();
             let phone = document.getElementById("login-phone").value.replace(/\D/g, "");
-            const terms = document.getElementById("login-terms") ? document.getElementById("login-terms").checked : true;
             
             if (phone.length === 9) phone = "998" + phone;
 
             if (!phone || !password) return showToast("Iltimos, ma'lumotlarni to'ldiring", "warning");
-            if (!terms) return showToast("Shartnomaga rozi bo'lishingiz kerak", "warning");
 
             try {
                 const btn = document.getElementById("login-btn");
@@ -564,7 +559,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Kuting...`;
                 }
                 
-                const res = await apiFetch('api/auth/login.php', 'POST', { phone, password, contract_accepted: true, contract_source: 'login' });
+                const res = await apiFetch('api/auth/login.php', 'POST', { phone, password });
                 if (res.success) {
                     STATE.currentUser = normalizeSessionUser(res.user);
                     localStorage.setItem(SESSION_KEY, JSON.stringify(STATE.currentUser));
@@ -575,7 +570,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 showToast(e.message, "danger");
                 const btn = document.getElementById("login-btn");
                 if (btn) {
-                    btn.disabled = !(document.getElementById("login-terms")?.checked ?? true);
+                    btn.disabled = false;
                     btn.innerHTML = "Kirish";
                 }
             }
@@ -2130,9 +2125,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
 
         document.addEventListener("DOMContentLoaded", () => {
             document.querySelectorAll("#login-phone,#reg-phone").forEach(input => input.addEventListener("input", () => formatPhoneInput(input)));
-            const loginTerms = document.getElementById("login-terms");
             const registerTerms = document.getElementById("register-terms");
-            if (loginTerms) loginTerms.addEventListener("change", event => document.getElementById("login-btn").disabled = !event.target.checked);
             if (registerTerms) registerTerms.addEventListener("change", event => document.getElementById("register-btn").disabled = !event.target.checked);
             document.addEventListener("click", event => {
                 if (!event.target.closest(".topbar-left")) toggleMobileMenu(false);
