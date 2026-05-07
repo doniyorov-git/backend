@@ -1125,6 +1125,19 @@
             color: var(--text);
         }
 
+        .contract-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.55rem;
+            border-bottom: 1px dashed var(--border);
+        }
+
+        .contract-meta p {
+            margin: 0;
+        }
+
         .contract-document h3 {
             margin-bottom: 0.65rem;
             text-align: center;

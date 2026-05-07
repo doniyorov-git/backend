@@ -94,6 +94,66 @@ function appValue($value, $fallback = 'Kiritilmagan') {
     return $value !== '' ? $value : $fallback;
 }
 
+function appContractDateText($date = null) {
+    $timestamp = $date ? strtotime((string) $date) : time();
+    if (!$timestamp) {
+        $timestamp = time();
+    }
+
+    $months = [
+        1 => 'yanvar',
+        2 => 'fevral',
+        3 => 'mart',
+        4 => 'aprel',
+        5 => 'may',
+        6 => 'iyun',
+        7 => 'iyul',
+        8 => 'avgust',
+        9 => 'sentabr',
+        10 => 'oktabr',
+        11 => 'noyabr',
+        12 => 'dekabr'
+    ];
+
+    $day = date('d', $timestamp);
+    $month = $months[(int) date('n', $timestamp)] ?? date('m', $timestamp);
+    $year = date('Y', $timestamp);
+
+    return $year . ' yil ' . $day . ' ' . $month;
+}
+
+function appContractHeaderHtml($context = []) {
+    $number = appValue($context['contract_number'] ?? '', '________');
+    $date = appContractDateText($context['contract_date'] ?? null);
+
+    return '
+        <div class="contract-meta">
+            <p><b>Shartnoma raqami:</b> ' . appEscape($number) . '-son</p>
+            <p><b>Sana:</b> ' . appEscape($date) . '</p>
+        </div>
+    ';
+}
+
+function appNextContractNumber(PDO $pdo) {
+    $year = date('Y');
+    $stmt = $pdo->prepare("
+        SELECT contract_number
+        FROM contract_signatures
+        WHERE contract_number LIKE ?
+        ORDER BY contract_number DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$year . '-%']);
+    $lastNumber = (string) ($stmt->fetchColumn() ?: '');
+    $sequence = 1;
+
+    if (preg_match('/^\d{4}-(\d+)$/', $lastNumber, $matches)) {
+        $sequence = ((int) $matches[1]) + 1;
+    }
+
+    return sprintf('%s-%06d', $year, $sequence);
+}
+
 function appFetchUserParty(PDO $pdo, $userId) {
     if (!$userId) {
         return null;
@@ -193,6 +253,7 @@ function appSellerListingContractHtml(PDO $pdo, $sellerId, $context = []) {
 
     $content = '
         <div class="contract-document">
+            ' . appContractHeaderHtml($context) . '
             <h4>1. SHARTNOMA TOMONLARI</h4>
             <p>1.1. "' . appEscape($platform['name']) . '", keyingi o\'rinlarda "Platforma" deb yuritiladi, direktor ' . appEscape($platform['director']) . ' nomidan bir tomondan, va</p>
             <p>1.2. "' . appEscape(appValue($seller['name'] ?? '')) . '", keyingi o\'rinlarda "Ishlab chiqaruvchi" deb yuritiladi, direktor yoki YATT ' . appEscape(appValue($seller['director'] ?? '', 'Kiritilmagan')) . ' nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to\'g\'risida tuzdilar:</p>
@@ -249,6 +310,7 @@ function appBuyerOrderContractHtml(PDO $pdo, $buyerId, $sellerId, $context = [])
 
     $content = '
         <div class="contract-document">
+            ' . appContractHeaderHtml($context) . '
             <h4>1. SHARTNOMA TOMONLARI</h4>
             <p>1.1. "' . appEscape($platform['name']) . '", keyingi o\'rinlarda "Platforma" deb yuritiladi, direktor ' . appEscape($platform['director']) . ' nomidan, va</p>
             <p>1.2. "' . appEscape(appValue($buyer['name'] ?? '')) . '", keyingi o\'rinlarda "Xaridor" deb yuritiladi, direktor yoki YATT ' . appEscape(appValue($buyer['director'] ?? '', 'Kiritilmagan')) . ' nomidan, mazkur shartnomani quyidagilar to\'g\'risida tuzdilar:</p>
@@ -293,6 +355,7 @@ function appPlatformTermsContractHtml(PDO $pdo, $userId, $context = []) {
 
     $content = '
         <div class="contract-document">
+            ' . appContractHeaderHtml($context) . '
             <h3>PLATFORMA OFERTASI VA XIZMAT KO\'RSATISH SHARTNOMASI</h3>
             <p>Ushbu shartnoma "' . appEscape($platform['name']) . '" va foydalanuvchi o\'rtasida elektron tarzda tuziladi.</p>
             <h4>1. TOMONLAR</h4>
@@ -328,6 +391,9 @@ function buildContractDocument(PDO $pdo, $type, $signerId, $counterpartyId = nul
 }
 
 function recordContractSignature(PDO $pdo, $type, $signerId, $counterpartyId = null, $context = []) {
+    $contractNumber = appNextContractNumber($pdo);
+    $context['contract_number'] = $contractNumber;
+    $context['contract_date'] = date('Y-m-d');
     $document = buildContractDocument($pdo, $type, $signerId, $counterpartyId, $context);
     $id = uniqid('ctr_');
     $ip = $_SERVER['REMOTE_ADDR'] ?? '';
@@ -337,12 +403,13 @@ function recordContractSignature(PDO $pdo, $type, $signerId, $counterpartyId = n
 
     $stmt = $pdo->prepare("
         INSERT INTO contract_signatures (
-            id, contract_type, title, signer_id, counterparty_id, product_id, order_id, source,
+            id, contract_number, contract_type, title, signer_id, counterparty_id, product_id, order_id, source,
             content, signer_snapshot, counterparty_snapshot, ip_address, user_agent
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $stmt->execute([
         $id,
+        $contractNumber,
         $type,
         $document['title'],
         $signerId,
@@ -378,6 +445,7 @@ function ensureAppSchema(PDO $pdo) {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS contract_signatures (
             id VARCHAR(50) PRIMARY KEY,
+            contract_number VARCHAR(20) NULL UNIQUE,
             contract_type ENUM('platform_terms', 'seller_listing', 'buyer_order') NOT NULL,
             title VARCHAR(255) NOT NULL,
             signer_id VARCHAR(50) NOT NULL,
@@ -398,6 +466,16 @@ function ensureAppSchema(PDO $pdo) {
             INDEX idx_contracts_product (product_id)
         ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
     ");
+
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'contract_signatures' AND COLUMN_NAME = 'contract_number'
+    ");
+    $stmt->execute();
+    if ((int) $stmt->fetchColumn() === 0) {
+        $pdo->exec("ALTER TABLE contract_signatures ADD COLUMN contract_number VARCHAR(20) NULL UNIQUE AFTER id");
+    }
 
     $stmt = $pdo->query("SHOW TABLES LIKE 'users'");
     if ($stmt->fetchColumn()) {
