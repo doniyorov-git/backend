@@ -378,6 +378,7 @@ function ensureAppSchema(PDO $pdo) {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS contract_signatures (
             id VARCHAR(50) PRIMARY KEY,
+            contract_number INT UNSIGNED NOT NULL AUTO_INCREMENT,
             contract_type ENUM('platform_terms', 'seller_listing', 'buyer_order') NOT NULL,
             title VARCHAR(255) NOT NULL,
             signer_id VARCHAR(50) NOT NULL,
@@ -392,12 +393,23 @@ function ensureAppSchema(PDO $pdo) {
             user_agent VARCHAR(255) NULL,
             signed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_contract_number (contract_number),
             INDEX idx_contracts_signer (signer_id, signed_at),
             INDEX idx_contracts_counterparty (counterparty_id, signed_at),
             INDEX idx_contracts_order (order_id),
             INDEX idx_contracts_product (product_id)
         ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
     ");
+
+    // Migrate: add contract_number to existing contract_signatures table
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'contract_signatures' AND COLUMN_NAME = 'contract_number'
+    ");
+    $stmt->execute();
+    if ((int) $stmt->fetchColumn() === 0) {
+        $pdo->exec("ALTER TABLE contract_signatures ADD COLUMN contract_number INT UNSIGNED NOT NULL AUTO_INCREMENT, ADD UNIQUE KEY uk_contract_number (contract_number)");
+    }
 
     $stmt = $pdo->query("SHOW TABLES LIKE 'users'");
     if ($stmt->fetchColumn()) {

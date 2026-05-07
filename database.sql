@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 CREATE TABLE IF NOT EXISTS contract_signatures (
     id VARCHAR(50) PRIMARY KEY,
+    contract_number INT UNSIGNED NOT NULL AUTO_INCREMENT,
     contract_type ENUM('platform_terms', 'seller_listing', 'buyer_order') NOT NULL,
     title VARCHAR(255) NOT NULL,
     signer_id VARCHAR(50) NOT NULL,
@@ -101,6 +102,7 @@ CREATE TABLE IF NOT EXISTS contract_signatures (
     user_agent VARCHAR(255),
     signed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_contract_number (contract_number),
     INDEX idx_contracts_signer (signer_id, signed_at),
     INDEX idx_contracts_counterparty (counterparty_id, signed_at),
     INDEX idx_contracts_order (order_id),

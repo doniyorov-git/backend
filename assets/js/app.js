@@ -177,6 +177,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 const mapContract = c => ({
                     ...c,
                     contractType: c.contract_type,
+                    contractNumber: c.contract_number ? Number(c.contract_number) : null,
                     signerId: c.signer_id,
                     signerName: c.signer_name,
                     signerRole: c.signer_role,
@@ -1451,9 +1452,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
                         </div>
                     </div>
                     ${contracts.length ? `<div class="table-responsive"><table>
-                        <thead><tr><th>Shartnoma</th><th>Tomonlar</th><th>Bog'lanish</th><th>Imzolangan vaqt</th><th>Amal</th></tr></thead>
+                        <thead><tr><th>#</th><th>Shartnoma</th><th>Tomonlar</th><th>Bog'lanish</th><th>Imzolangan vaqt</th><th>Amal</th></tr></thead>
                         <tbody>${contracts.map(contract => `
                             <tr>
+                                <td class="font-bold text-primary">${contract.contractNumber || '—'}</td>
                                 <td><b>${escapeHtml(contract.title || contractTypeLabel(contract.contractType))}</b><div class="text-xs text-muted">${escapeHtml(contractTypeLabel(contract.contractType))}</div></td>
                                 <td>${escapeHtml(contractRelationText(contract))}</td>
                                 <td class="text-sm text-muted">
@@ -1474,6 +1476,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             if (!contract) return;
             modal(escapeHtml(contract.title || contractTypeLabel(contract.contractType)), `
                 <div class="details-list mb-4">
+                    ${contract.contractNumber ? `<div class="details-row"><span class="details-label">Shartnoma raqami:</span><span class="details-value font-bold text-primary">${contract.contractNumber}-son</span></div>` : ""}
                     <div class="details-row"><span class="details-label">Turi:</span><span class="details-value">${escapeHtml(contractTypeLabel(contract.contractType))}</span></div>
                     <div class="details-row"><span class="details-label">Imzolovchi:</span><span class="details-value">${escapeHtml(contract.signerName || "Noma'lum")} (${escapeHtml(roleLabel(contract.signerRole))})</span></div>
                     ${contract.counterpartyName ? `<div class="details-row"><span class="details-label">Qarshi tomon:</span><span class="details-value">${escapeHtml(contract.counterpartyName)} (${escapeHtml(roleLabel(contract.counterpartyRole))})</span></div>` : ""}
@@ -1906,6 +1909,16 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return "";
         }
 
+        function buildPaymentPurpose(orderId, payerName) {
+            const contract = (DB.contracts || []).find(c => c.contractType === 'buyer_order' && c.orderId === orderId);
+            const contractNum = contract ? contract.contractNumber : null;
+            const year = contract && contract.signedAt ? new Date(contract.signedAt).getFullYear() : new Date().getFullYear();
+            if (contractNum) {
+                return `${year} yil «__» ________dagi ${contractNum}-sonli shartnomaga asosan platforma xizmatlari uchun to'lov.`;
+            }
+            return `Platforma xizmatlari uchun to'lov.`;
+        }
+
         function openPaymentModal(orderId, type) {
             const order = DB.orders.find(item => item.id === orderId);
             if (!order) return;
@@ -1916,6 +1929,8 @@ const STORAGE_KEY = "myDillerUzStateV2";
             
             if (type === "seller") {
                 const seller = userById(order.sellerId);
+                const buyerName = STATE.currentUser.name || '';
+                const purpose = buildPaymentPurpose(orderId, buyerName);
                 title = "To'lov cheki (Sotuvchiga)";
                 body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
                     <div style="font-size:3.5rem;color:var(--primary);margin-bottom:1rem;"><i class="ri-secure-payment-line"></i></div>
@@ -1928,10 +1943,18 @@ const STORAGE_KEY = "myDillerUzStateV2";
                         <div class="text-sm text-muted">To'lanadigan summa:</div>
                         <div class="font-bold text-primary" style="font-size:2rem;">${money(order.total)}</div>
                     </div>
+                    <div style="margin-top:1rem;padding:0.75rem;background:#f0fdf4;border-radius:8px;border:1px dashed #86efac;text-align:left;">
+                        <div class="text-xs text-muted" style="margin-bottom:0.25rem;">To'lovchi (YATT nomi):</div>
+                        <div style="font-weight:600;color:var(--text-dark);margin-bottom:0.5rem;">${escapeHtml(buyerName)}</div>
+                        <div class="text-xs text-muted" style="margin-bottom:0.25rem;">To'lov maqsadi:</div>
+                        <div style="font-size:0.85rem;color:var(--text-dark);">${escapeHtml(purpose)}</div>
+                    </div>
                     <p class="text-xs text-muted mt-4">Iltimos, to'lovni yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
                 </div>`;
                 action = `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','buyer_paid')"><i class="ri-check-double-line"></i> To'ladim</button>`;
             } else if (type === "admin") {
+                const sellerName = (userById(order.sellerId) || {}).name || STATE.currentUser.name || '';
+                const purpose = buildPaymentPurpose(orderId, sellerName);
                 title = "To'lov cheki (Komissiya)";
                 body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
                     <div style="font-size:3.5rem;color:var(--info);margin-bottom:1rem;"><i class="ri-bank-card-line"></i></div>
@@ -1944,6 +1967,12 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     <div class="mt-4 mb-2">
                         <div class="text-sm text-muted">To'lanadigan komissiya:</div>
                         <div class="font-bold text-primary" style="font-size:2rem;">${money(order.total * 0.05)}</div>
+                    </div>
+                    <div style="margin-top:1rem;padding:0.75rem;background:#f0fdf4;border-radius:8px;border:1px dashed #86efac;text-align:left;">
+                        <div class="text-xs text-muted" style="margin-bottom:0.25rem;">To'lovchi (YATT nomi):</div>
+                        <div style="font-weight:600;color:var(--text-dark);margin-bottom:0.5rem;">${escapeHtml(sellerName)}</div>
+                        <div class="text-xs text-muted" style="margin-bottom:0.25rem;">To'lov maqsadi:</div>
+                        <div style="font-size:0.85rem;color:var(--text-dark);">${escapeHtml(purpose)}</div>
                     </div>
                     <p class="text-xs text-muted mt-4">Iltimos, komissiya to'lovini yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
                 </div>`;
@@ -1971,6 +2000,9 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function openFinancePaymentModal(orderId) {
             const order = DB.orders.find(item => item.id === orderId);
             if (!order) return;
+
+            const sellerName = STATE.currentUser.name || '';
+            const purpose = buildPaymentPurpose(orderId, sellerName);
             
             const title = "To'lov cheki (Komissiya)";
             const body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
@@ -1984,6 +2016,12 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 <div class="mt-4 mb-2">
                     <div class="text-sm text-muted">To'lanadigan komissiya:</div>
                     <div class="font-bold text-primary" style="font-size:2rem;">${money(order.comm || order.total * 0.05)}</div>
+                </div>
+                <div style="margin-top:1rem;padding:0.75rem;background:#f0fdf4;border-radius:8px;border:1px dashed #86efac;text-align:left;">
+                    <div class="text-xs text-muted" style="margin-bottom:0.25rem;">To'lovchi (YATT nomi):</div>
+                    <div style="font-weight:600;color:var(--text-dark);margin-bottom:0.5rem;">${escapeHtml(sellerName)}</div>
+                    <div class="text-xs text-muted" style="margin-bottom:0.25rem;">To'lov maqsadi:</div>
+                    <div style="font-size:0.85rem;color:var(--text-dark);">${escapeHtml(purpose)}</div>
                 </div>
                 <p class="text-xs text-muted mt-4">Iltimos, komissiya to'lovini yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
             </div>`;
