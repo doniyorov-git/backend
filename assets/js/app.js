@@ -177,6 +177,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 const mapContract = c => ({
                     ...c,
                     contractType: c.contract_type,
+                    contractNumber: c.contract_number,
                     signerId: c.signer_id,
                     signerName: c.signer_name,
                     signerRole: c.signer_role,
@@ -288,6 +289,43 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return raw;
         }
 
+        function formatContractPurposeDate(value) {
+            const raw = String(value || "").trim();
+            const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (!match) return "";
+            const [, year, month, day] = match;
+            const months = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"];
+            return `${year}-yil ${Number(day)}-${months[Number(month) - 1]}dagi`;
+        }
+
+        function contractNumber(contract) {
+            const explicitNumber = String(contract?.contractNumber || contract?.contract_number || "").trim();
+            if (explicitNumber) return explicitNumber;
+            const signedAtDigits = String(contract?.signedAt || contract?.created_at || "").replace(/\D/g, "");
+            if (signedAtDigits.length >= 14) return signedAtDigits.slice(0, 14);
+            const rawId = String(contract?.id || "").replace(/^ctr_?/i, "").replace(/[^\w-]/g, "").toUpperCase();
+            return rawId || "Aniqlanmagan";
+        }
+
+        function legalPartyName(name, defaultSuffix = "XK") {
+            const clean = String(name || "").trim();
+            if (!clean) return "Kiritilmagan";
+            return /\b(MCHJ|XK|YATT|OOO|AJ|QK|LLC)\b/i.test(clean) ? clean : `${clean} ${defaultSuffix}`;
+        }
+
+        function contractReferenceText(contract, fallbackDate = "") {
+            const number = contractNumber(contract);
+            const dateText = formatContractPurposeDate(contract?.signedAt || fallbackDate);
+            if (dateText && number !== "Aniqlanmagan") return `${dateText} ${number}-sonli shartnomaga asosan`;
+            if (dateText) return `${dateText} tuzilgan shartnomaga asosan`;
+            if (number !== "Aniqlanmagan") return `${number}-sonli shartnomaga asosan`;
+            return "shartnomaga asosan";
+        }
+
+        function paymentPurposeText({ contract, fallbackDate, partyName, defaultSuffix = "XK", serviceText }) {
+            return `${legalPartyName(partyName, defaultSuffix)}. ${contractReferenceText(contract, fallbackDate)} ${serviceText}.`;
+        }
+
         function formatPhoneInput(input) {
             const digits = phoneDigits(input.value);
             input.value = digits.replace(/(\d{2})(\d{3})(\d{2})(\d{0,2})/, (_, a, b, c, d) => [a, b, c, d].filter(Boolean).join(" "));
@@ -327,6 +365,56 @@ const STORAGE_KEY = "myDillerUzStateV2";
 
         function productById(id) {
             return DB.products.find(product => product.id === id);
+        }
+
+        function orderContractById(orderId) {
+            return DB.contracts.find(contract => contract.contractType === "buyer_order" && contract.orderId === orderId);
+        }
+
+        function sellerListingContractForOrder(order) {
+            const productIds = (order.items || []).map(item => item.prodId || item.product_id).filter(Boolean);
+            const relatedByProduct = DB.contracts.find(contract => contract.contractType === "seller_listing" && contract.signerId === order.sellerId && productIds.includes(contract.productId));
+            if (relatedByProduct) return relatedByProduct;
+            return DB.contracts.find(contract => contract.contractType === "seller_listing" && contract.signerId === order.sellerId);
+        }
+
+        function platformPaymentParty() {
+            const party = platformParty();
+            return {
+                ...party,
+                name: party.name || "RoboTexnika MCHJ",
+                inn: party.inn && party.inn !== "Kiritilmagan" ? party.inn : "310938488",
+                bankAccount: party.bankAccount && party.bankAccount !== "Kiritilmagan" ? party.bankAccount : "20208000905719313001",
+                bankMfo: party.bankMfo && party.bankMfo !== "Kiritilmagan" ? party.bankMfo : "00446"
+            };
+        }
+
+        function adminCommissionPaymentHtml(order) {
+            const platform = platformPaymentParty();
+            const commissionContract = sellerListingContractForOrder(order);
+            const paymentPurpose = paymentPurposeText({
+                contract: commissionContract,
+                fallbackDate: order.createdAt || order.date,
+                partyName: platform.name,
+                defaultSuffix: "MCHJ",
+                serviceText: "platforma xizmatlari uchun to'lov"
+            });
+            return `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
+                <div style="font-size:3.5rem;color:var(--info);margin-bottom:1rem;"><i class="ri-bank-card-line"></i></div>
+                <h3 class="mb-3">Admin rekvizitlari (5% komissiya)</h3>
+                <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
+                    <div style="margin-bottom:.5rem;">Tashkilot nomi:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(legalPartyName(platform.name, "MCHJ"))}</b></div>
+                    <div style="margin-bottom:.5rem;">INN:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(platform.inn)}</b></div>
+                    <div style="margin-bottom:.5rem;">H/r:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(platform.bankAccount)}</b></div>
+                    <div style="margin-bottom:.5rem;">MFO:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(platform.bankMfo)}</b></div>
+                    <div>To'lov maqsadi:<br><b style="font-size:1rem;line-height:1.6;color:var(--text-dark);display:block;white-space:normal;">${escapeHtml(paymentPurpose)}</b></div>
+                </div>
+                <div class="mt-4 mb-2">
+                    <div class="text-sm text-muted">To'lanadigan komissiya:</div>
+                    <div class="font-bold text-primary" style="font-size:2rem;">${money(order.comm || order.total * 0.05)}</div>
+                </div>
+                <p class="text-xs text-muted mt-4">Iltimos, komissiya to'lovini yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
+            </div>`;
         }
 
         function roleLabel(role) {
@@ -1454,7 +1542,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                         <thead><tr><th>Shartnoma</th><th>Tomonlar</th><th>Bog'lanish</th><th>Imzolangan vaqt</th><th>Amal</th></tr></thead>
                         <tbody>${contracts.map(contract => `
                             <tr>
-                                <td><b>${escapeHtml(contract.title || contractTypeLabel(contract.contractType))}</b><div class="text-xs text-muted">${escapeHtml(contractTypeLabel(contract.contractType))}</div></td>
+                                <td><b>${escapeHtml(contract.title || contractTypeLabel(contract.contractType))}</b><div class="text-xs text-muted">No. ${escapeHtml(contractNumber(contract))}</div><div class="text-xs text-muted">${escapeHtml(contractTypeLabel(contract.contractType))}</div></td>
                                 <td>${escapeHtml(contractRelationText(contract))}</td>
                                 <td class="text-sm text-muted">
                                     ${contract.orderId ? `Buyurtma #${escapeHtml(contract.orderId)}` : ""}
@@ -1474,6 +1562,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             if (!contract) return;
             modal(escapeHtml(contract.title || contractTypeLabel(contract.contractType)), `
                 <div class="details-list mb-4">
+                    <div class="details-row"><span class="details-label">Raqami:</span><span class="details-value">${escapeHtml(contractNumber(contract))}</span></div>
                     <div class="details-row"><span class="details-label">Turi:</span><span class="details-value">${escapeHtml(contractTypeLabel(contract.contractType))}</span></div>
                     <div class="details-row"><span class="details-label">Imzolovchi:</span><span class="details-value">${escapeHtml(contract.signerName || "Noma'lum")} (${escapeHtml(roleLabel(contract.signerRole))})</span></div>
                     ${contract.counterpartyName ? `<div class="details-row"><span class="details-label">Qarshi tomon:</span><span class="details-value">${escapeHtml(contract.counterpartyName)} (${escapeHtml(roleLabel(contract.counterpartyRole))})</span></div>` : ""}
@@ -1867,7 +1956,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 return `<div class="details-row"><span class="details-label">${escapeHtml(product.name)} x ${item.qty}</span><span class="details-value">${money(product.price * item.qty)}</span></div>`;
             }).join("") || `<div class="text-sm text-muted">Mahsulotlar ro'yxati topilmadi</div>`;
             const actions = orderActions(order);
-            const orderContract = DB.contracts.find(contract => contract.contractType === "buyer_order" && contract.orderId === order.id);
+            const orderContract = orderContractById(order.id);
             modal(`Buyurtma #${order.id}`, `
                 <div class="details-list mb-4">
                     <div class="details-row"><span class="details-label">Sotuvchi:</span><span class="details-value">${escapeHtml(userById(order.sellerId).name)}</span></div>
@@ -1875,6 +1964,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     <div class="details-row"><span class="details-label">Sana:</span><span class="details-value">${escapeHtml(order.date || order.createdAt || "")}</span></div>
                     <div class="details-row"><span class="details-label">Holat:</span><span class="details-value">${statusBadge(order.status)}</span></div>
                     <div class="details-row"><span class="details-label">Jami:</span><span class="details-value text-primary">${money(order.total)}</span></div>
+                    ${orderContract ? `<div class="details-row"><span class="details-label">Shartnoma raqami:</span><span class="details-value">${escapeHtml(contractNumber(orderContract))}</span></div>` : ""}
                 </div>
                 <h4 class="mb-2">Mahsulotlar</h4>
                 <div class="details-list">${items}</div>
@@ -1916,13 +2006,23 @@ const STORAGE_KEY = "myDillerUzStateV2";
             
             if (type === "seller") {
                 const seller = userById(order.sellerId);
+                const orderContract = orderContractById(order.id);
+                const paymentPurpose = paymentPurposeText({
+                    contract: orderContract,
+                    fallbackDate: order.createdAt || order.date,
+                    partyName: seller.name,
+                    defaultSuffix: "XK",
+                    serviceText: "yetkazib berilgan mahsulotlar uchun to'lov"
+                });
                 title = "To'lov cheki (Sotuvchiga)";
                 body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
                     <div style="font-size:3.5rem;color:var(--primary);margin-bottom:1rem;"><i class="ri-secure-payment-line"></i></div>
                     <h3 class="mb-3">Sotuvchi rekvizitlari</h3>
                     <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
+                        <div style="margin-bottom:.5rem;">YATT/XK nomi:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(legalPartyName(seller.name, "XK"))}</b></div>
                         <div style="margin-bottom:.5rem;">Bank hisob raqami:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(seller.bankAccount || "Kiritilmagan")}</b></div>
-                        <div>MFO:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(seller.bankMfo || "Kiritilmagan")}</b></div>
+                        <div style="margin-bottom:.5rem;">MFO:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(seller.bankMfo || "Kiritilmagan")}</b></div>
+                        <div>To'lov maqsadi:<br><b style="font-size:1rem;line-height:1.6;color:var(--text-dark);display:block;white-space:normal;">${escapeHtml(paymentPurpose)}</b></div>
                     </div>
                     <div class="mt-4 mb-2">
                         <div class="text-sm text-muted">To'lanadigan summa:</div>
@@ -1933,20 +2033,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 action = `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','buyer_paid')"><i class="ri-check-double-line"></i> To'ladim</button>`;
             } else if (type === "admin") {
                 title = "To'lov cheki (Komissiya)";
-                body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
-                    <div style="font-size:3.5rem;color:var(--info);margin-bottom:1rem;"><i class="ri-bank-card-line"></i></div>
-                    <h3 class="mb-3">Admin rekvizitlari (5% Komissiya)</h3>
-                    <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
-                        <div style="margin-bottom:.5rem;">ИНН:<br><b style="font-size:1.1rem;color:var(--text-dark);">310938488</b></div>
-                        <div style="margin-bottom:.5rem;">Х/Р:<br><b style="font-size:1.1rem;color:var(--text-dark);">20208000905719313001</b></div>
-                        <div>МФО:<br><b style="font-size:1.1rem;color:var(--text-dark);">00446</b></div>
-                    </div>
-                    <div class="mt-4 mb-2">
-                        <div class="text-sm text-muted">To'lanadigan komissiya:</div>
-                        <div class="font-bold text-primary" style="font-size:2rem;">${money(order.total * 0.05)}</div>
-                    </div>
-                    <p class="text-xs text-muted mt-4">Iltimos, komissiya to'lovini yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
-                </div>`;
+                body = adminCommissionPaymentHtml(order);
                 action = `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','seller_paid_comm')"><i class="ri-check-double-line"></i> To'ladim</button>`;
             }
             
@@ -1973,20 +2060,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             if (!order) return;
             
             const title = "To'lov cheki (Komissiya)";
-            const body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
-                <div style="font-size:3.5rem;color:var(--info);margin-bottom:1rem;"><i class="ri-bank-card-line"></i></div>
-                <h3 class="mb-3">Admin rekvizitlari (5% Komissiya)</h3>
-                <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
-                    <div style="margin-bottom:.5rem;">ИНН:<br><b style="font-size:1.1rem;color:var(--text-dark);">310938488</b></div>
-                    <div style="margin-bottom:.5rem;">Х/Р:<br><b style="font-size:1.1rem;color:var(--text-dark);">20208000905719313001</b></div>
-                    <div>МФО:<br><b style="font-size:1.1rem;color:var(--text-dark);">00446</b></div>
-                </div>
-                <div class="mt-4 mb-2">
-                    <div class="text-sm text-muted">To'lanadigan komissiya:</div>
-                    <div class="font-bold text-primary" style="font-size:2rem;">${money(order.comm || order.total * 0.05)}</div>
-                </div>
-                <p class="text-xs text-muted mt-4">Iltimos, komissiya to'lovini yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
-            </div>`;
+            const body = adminCommissionPaymentHtml(order);
             const action = `<button class="btn btn-primary" onclick="markCommPaidBySeller('${order.id}')"><i class="ri-check-double-line"></i> To'ladim</button>`;
             
             modal(title, body, `<button class="btn btn-outline" onclick="closeModal()">Orqaga</button>${action}`);
