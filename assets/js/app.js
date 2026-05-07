@@ -33,7 +33,6 @@ const STORAGE_KEY = "myDillerUzStateV2";
             name: "Tizim Administratori",
             status: "active",
             phone: "+998000000000",
-            password: "admin",
             address: "Toshkent"
         };
 
