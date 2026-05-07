@@ -471,8 +471,6 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function sellerListingContractHtml(product = {}) {
             const seller = currentUserParty();
             return `<div class="contract-document">
-                <h3>HAMKORLIK VA XIZMAT KO'RSATISH SHARTNOMASI № 1</h3>
-                <p>"___" ________ 2026 y. Andijon sh.</p>
                 <h4>1. SHARTNOMA TOMONLARI</h4>
                 <p>1.1. "RoboTexnika" MCHJ, keyingi o'rinlarda "Platforma" deb yuritiladi, direktor Mirzayev Sardor nomidan bir tomondan, va</p>
                 <p>1.2. "${escapeHtml(seller.name || "Kiritilmagan")}", keyingi o'rinlarda "Ishlab chiqaruvchi" deb yuritiladi, mazkur shartnomani quyidagilar to'g'risida tuzdilar:</p>
@@ -504,8 +502,6 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function buyerOrderContractHtml(total = 0) {
             const buyer = currentUserParty();
             return `<div class="contract-document">
-                <h3>MAHSULOT YETKAZIB BERISH VA XIZMAT KO'RSATISH SHARTNOMASI №___</h3>
-                <p>"___" ________ 2026 y. Andijon sh.</p>
                 <h4>1. SHARTNOMA TOMONLARI</h4>
                 <p>1.1. "RoboTexnika" MCHJ, keyingi o'rinlarda "Platforma" deb yuritiladi, direktor Mirzayev Sardor nomidan, va</p>
                 <p>1.2. "${escapeHtml(buyer.name || "Kiritilmagan")}", keyingi o'rinlarda "Xaridor" deb yuritiladi, mazkur shartnomani quyidagilar to'g'risida tuzdilar:</p>
