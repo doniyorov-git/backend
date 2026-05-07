@@ -6,9 +6,11 @@ $buyerId = $_SESSION['user']['id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $stmt = $pdo->prepare("
-        SELECT o.*, s.name as seller_name, s.phone as seller_phone, s.bank_account, s.mfo 
+        SELECT o.*, s.name as seller_name, s.phone as seller_phone, s.bank_account, s.mfo,
+               cs.contract_number, cs.signed_at as contract_date
         FROM orders o
         JOIN users s ON o.seller_id = s.id
+        LEFT JOIN contract_signatures cs ON cs.order_id = o.id AND cs.contract_type = 'buyer_order'
         WHERE o.buyer_id = ?
         ORDER BY o.created_at DESC
     ");

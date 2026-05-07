@@ -89,6 +89,15 @@ function appEscape($value) {
     return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES, 'UTF-8');
 }
 
+function appMonthName($month) {
+    $months = [
+        1 => 'yanvar', 2 => 'fevral', 3 => 'mart', 4 => 'aprel',
+        5 => 'may', 6 => 'iyun', 7 => 'iyul', 8 => 'avgust',
+        9 => 'sentyabr', 10 => 'oktyabr', 11 => 'noyabr', 12 => 'dekabr'
+    ];
+    return $months[$month] ?? '';
+}
+
 function appValue($value, $fallback = 'Kiritilmagan') {
     $value = trim((string) ($value ?? ''));
     return $value !== '' ? $value : $fallback;
@@ -180,6 +189,8 @@ function appSellerListingContractHtml(PDO $pdo, $sellerId, $context = []) {
     $platform = appPlatformParty($pdo);
     $seller = appFetchUserParty($pdo, $sellerId);
     $product = appFetchProduct($pdo, $context['product_id'] ?? null);
+    $contractNumber = $context['contract_number'] ?? '';
+    $contractDate = date('d.m.Y');
     $productTradeTerms = '';
     if ($product) {
         $productTradeTerms = $product['model'] === 'prepayment'
@@ -193,6 +204,11 @@ function appSellerListingContractHtml(PDO $pdo, $sellerId, $context = []) {
 
     $content = '
         <div class="contract-document">
+            <div style="text-align:center;margin-bottom:1rem;">
+                <h3>HAMKORLIK VA XIZMAT KO\'RSATISH SHARTNOMASI</h3>
+                <p><b>Shartnoma raqami: ' . appEscape($contractNumber) . '</b></p>
+                <p>Sana: ' . appEscape($contractDate) . '</p>
+            </div>
             <h4>1. SHARTNOMA TOMONLARI</h4>
             <p>1.1. "' . appEscape($platform['name']) . '", keyingi o\'rinlarda "Platforma" deb yuritiladi, direktor ' . appEscape($platform['director']) . ' nomidan bir tomondan, va</p>
             <p>1.2. "' . appEscape(appValue($seller['name'] ?? '')) . '", keyingi o\'rinlarda "Ishlab chiqaruvchi" deb yuritiladi, direktor yoki YATT ' . appEscape(appValue($seller['director'] ?? '', 'Kiritilmagan')) . ' nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to\'g\'risida tuzdilar:</p>
@@ -213,7 +229,8 @@ function appSellerListingContractHtml(PDO $pdo, $sellerId, $context = []) {
             <p>4.1. Platformaning xizmat haqi Mijoz tomonidan to\'langan tovar qiymatining 5% (besh foiz) miqdorini tashkil etadi.</p>
             <p>4.2. Platforma xizmatlari uchun hisob-fakturalarni har oy yakunida taqdim etadi.</p>
             <p>4.3. Ishlab chiqaruvchi komissiya to\'lovini solishtirma dalolatnoma tasdiqlangan kundan boshlab 5 (besh) bank ish kuni ichida Platformaning hisob raqamiga o\'tkazadi.</p>
-            <p>4.4. Agar tovar Mijoz tomonidan qaytarilsa, ushbu tovar bo\'yicha hisoblangan komissiya keyingi davr hisob-kitoblarida chegirib qolinadi.</p>
+            <p>4.4. <b>To\'lov maqsadi:</b> ' . appEscape(date('Y')) . ' yil «' . appEscape(date('d')) . '» ' . appEscape(appMonthName((int)date('m'))) . 'dagi ' . appEscape($contractNumber) . '-sonli shartnomaga asosan ' . appEscape(appValue($seller['name'] ?? '')) . ' XK platforma xizmatlari uchun to\'lov.</p>
+            <p>4.5. Agar tovar Mijoz tomonidan qaytarilsa, ushbu tovar bo\'yicha hisoblangan komissiya keyingi davr hisob-kitoblarida chegirib qolinadi.</p>
             <h4>5. KAFOLAT VA MOLIYAVIY QO\'LLAB-QUVVATLASH</h4>
             <p>5.1. Platforma Mijozlarning to\'lov qobiliyatini o\'z ichki tizimi orqali tahlil qiladi.</p>
             <p>5.2. Alohida kelishuvga asosan Platforma Mijozning muddati o\'tgan debitorlik qarzdorligini vaqtinchalik qoplab berishi mumkin.</p>
@@ -243,12 +260,20 @@ function appBuyerOrderContractHtml(PDO $pdo, $buyerId, $sellerId, $context = [])
     $buyer = appFetchUserParty($pdo, $buyerId);
     $seller = appFetchUserParty($pdo, $sellerId);
     $order = appFetchOrder($pdo, $context['order_id'] ?? null);
+    $contractNumber = $context['contract_number'] ?? '';
+    $contractDate = date('d.m.Y');
+    $comm = $order ? number_format($order['total'] * 0.05, 2, '.', '') : '0.00';
     $orderLine = $order
-        ? '<p><b>Buyurtma:</b> #' . appEscape($order['id']) . ', summa: ' . appEscape($order['total']) . ' UZS.</p>'
+        ? '<p><b>Buyurtma:</b> #' . appEscape($order['id']) . ', summa: ' . appEscape($order['total']) . ' UZS, platforma komissiyasi (5%): ' . appEscape($comm) . ' UZS.</p>'
         : '';
 
     $content = '
         <div class="contract-document">
+            <div style="text-align:center;margin-bottom:1rem;">
+                <h3>MAHSULOT YETKAZIB BERISH VA XIZMAT KO\'RSATISH SHARTNOMASI</h3>
+                <p><b>Shartnoma raqami: ' . appEscape($contractNumber) . '</b></p>
+                <p>Sana: ' . appEscape($contractDate) . '</p>
+            </div>
             <h4>1. SHARTNOMA TOMONLARI</h4>
             <p>1.1. "' . appEscape($platform['name']) . '", keyingi o\'rinlarda "Platforma" deb yuritiladi, direktor ' . appEscape($platform['director']) . ' nomidan, va</p>
             <p>1.2. "' . appEscape(appValue($buyer['name'] ?? '')) . '", keyingi o\'rinlarda "Xaridor" deb yuritiladi, direktor yoki YATT ' . appEscape(appValue($buyer['director'] ?? '', 'Kiritilmagan')) . ' nomidan, mazkur shartnomani quyidagilar to\'g\'risida tuzdilar:</p>
@@ -264,6 +289,7 @@ function appBuyerOrderContractHtml(PDO $pdo, $buyerId, $sellerId, $context = [])
             <p>4.1. Tovar narxi Platforma tizimida buyurtma berilgan vaqtdagi narx bo\'yicha belgilanadi.</p>
             <p>4.2. Xaridor tovar uchun to\'lovni oldindan to\'lov, bo\'lib to\'lash yoki kechiktirilgan to\'lov shaklida amalga oshirishi mumkin.</p>
             <p>4.3. To\'lovlar naqd pulsiz shaklda, Platformaning tizimida ko\'rsatilgan hisob raqamlariga amalga oshiriladi.</p>
+            <p>4.4. <b>To\'lov maqsadi:</b> ' . appEscape(date('Y')) . ' yil «' . appEscape(date('d')) . '» ' . appEscape(appMonthName((int)date('m'))) . 'dagi ' . appEscape($contractNumber) . '-sonli shartnomaga asosan ' . appEscape(appValue($seller['name'] ?? '')) . ' XK platforma xizmatlari uchun to\'lov.</p>
             <h4>5. PLATFORMANING KAFOLATLARI</h4>
             <p>5.1. Platforma Xaridor va Ishlab chiqaruvchi o\'rtasidagi hisob-kitoblarning shaffofligini ta\'minlaydi.</p>
             <p>5.2. Agar yetkazib berilgan tovar yaroqsiz chiqsa, Xaridor 24 soat ichida Platformaga ariza beradi va Platforma tovarni almashtirish yoki mablag\'ni qaytarish jarayonini muvofiqlashtiradi.</p>
@@ -290,10 +316,16 @@ function appPlatformTermsContractHtml(PDO $pdo, $userId, $context = []) {
     $platform = appPlatformParty($pdo);
     $user = appFetchUserParty($pdo, $userId);
     $source = $context['source'] ?? 'register';
+    $contractNumber = $context['contract_number'] ?? '';
+    $contractDate = date('d.m.Y');
 
     $content = '
         <div class="contract-document">
-            <h3>PLATFORMA OFERTASI VA XIZMAT KO\'RSATISH SHARTNOMASI</h3>
+            <div style="text-align:center;margin-bottom:1rem;">
+                <h3>PLATFORMA OFERTASI VA XIZMAT KO\'RSATISH SHARTNOMASI</h3>
+                <p><b>Shartnoma raqami: ' . appEscape($contractNumber) . '</b></p>
+                <p>Sana: ' . appEscape($contractDate) . '</p>
+            </div>
             <p>Ushbu shartnoma "' . appEscape($platform['name']) . '" va foydalanuvchi o\'rtasida elektron tarzda tuziladi.</p>
             <h4>1. TOMONLAR</h4>
             <p>1.1. Platforma: "' . appEscape($platform['name']) . '", direktor ' . appEscape($platform['director']) . '.</p>
@@ -327,7 +359,14 @@ function buildContractDocument(PDO $pdo, $type, $signerId, $counterpartyId = nul
     return appPlatformTermsContractHtml($pdo, $signerId, $context);
 }
 
+function getNextContractNumber(PDO $pdo) {
+    $stmt = $pdo->query("SELECT COALESCE(MAX(contract_number), 0) + 1 FROM contract_signatures");
+    return (int) $stmt->fetchColumn();
+}
+
 function recordContractSignature(PDO $pdo, $type, $signerId, $counterpartyId = null, $context = []) {
+    $contractNumber = getNextContractNumber($pdo);
+    $context['contract_number'] = $contractNumber;
     $document = buildContractDocument($pdo, $type, $signerId, $counterpartyId, $context);
     $id = uniqid('ctr_');
     $ip = $_SERVER['REMOTE_ADDR'] ?? '';
@@ -337,12 +376,13 @@ function recordContractSignature(PDO $pdo, $type, $signerId, $counterpartyId = n
 
     $stmt = $pdo->prepare("
         INSERT INTO contract_signatures (
-            id, contract_type, title, signer_id, counterparty_id, product_id, order_id, source,
+            id, contract_number, contract_type, title, signer_id, counterparty_id, product_id, order_id, source,
             content, signer_snapshot, counterparty_snapshot, ip_address, user_agent
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $stmt->execute([
         $id,
+        $contractNumber,
         $type,
         $document['title'],
         $signerId,
@@ -378,6 +418,7 @@ function ensureAppSchema(PDO $pdo) {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS contract_signatures (
             id VARCHAR(50) PRIMARY KEY,
+            contract_number INT UNSIGNED NOT NULL,
             contract_type ENUM('platform_terms', 'seller_listing', 'buyer_order') NOT NULL,
             title VARCHAR(255) NOT NULL,
             signer_id VARCHAR(50) NOT NULL,
@@ -398,6 +439,21 @@ function ensureAppSchema(PDO $pdo) {
             INDEX idx_contracts_product (product_id)
         ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
     ");
+
+    $stmt = $pdo->query("SHOW TABLES LIKE 'contract_signatures'");
+    if ($stmt->fetchColumn()) {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'contract_signatures' AND COLUMN_NAME = 'contract_number'
+        ");
+        $stmt->execute();
+        if ((int) $stmt->fetchColumn() === 0) {
+            $pdo->exec("ALTER TABLE contract_signatures ADD COLUMN contract_number INT UNSIGNED NOT NULL DEFAULT 0 AFTER id");
+            $pdo->exec("SET @row_num = 0");
+            $pdo->exec("UPDATE contract_signatures SET contract_number = (@row_num := @row_num + 1) ORDER BY created_at ASC");
+        }
+    }
 
     $stmt = $pdo->query("SHOW TABLES LIKE 'users'");
     if ($stmt->fetchColumn()) {
