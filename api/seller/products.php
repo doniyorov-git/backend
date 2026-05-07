@@ -48,6 +48,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         sendJson(['success' => false, 'message' => 'Mahsulot nomi, kategoriya, viloyat, model va narx majburiy'], 400);
     }
 
+    if (!$isUpdate && empty($_POST['contract_accepted'])) {
+        sendJson(['success' => false, 'message' => 'Mahsulot joylash uchun shartnomaga rozilik talab qilinadi'], 400);
+    }
+
     $imagePath = saveUploadedFile('image', 'products', 'img');
 
     if ($isUpdate) {
@@ -76,6 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
         ");
         $stmt->execute([$id, $sellerId, $name, $sku, $category, $region, $model, $price, $unit, $imagePath]);
+        recordContractSignature($pdo, 'seller_listing', $sellerId, null, ['product_id' => $id, 'source' => 'product_create']);
         notifyRole($pdo, 'admin', 'Yangi mahsulot moderatsiyada', $name . ' mahsuloti tasdiqlash uchun yuborildi.', 'info', 'admin-moderation');
     }
     

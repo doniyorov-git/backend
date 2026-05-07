@@ -5,6 +5,7 @@ DROP TABLE IF EXISTS reports;
 DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS ticket_replies;
 DROP TABLE IF EXISTS tickets;
+DROP TABLE IF EXISTS contract_signatures;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS products;
@@ -79,6 +80,32 @@ CREATE TABLE IF NOT EXISTS order_items (
     price DECIMAL(15,2) NOT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS contract_signatures (
+    id VARCHAR(50) PRIMARY KEY,
+    contract_type ENUM('platform_terms', 'seller_listing', 'buyer_order') NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    signer_id VARCHAR(50) NOT NULL,
+    counterparty_id VARCHAR(50),
+    product_id VARCHAR(50),
+    order_id VARCHAR(50),
+    source VARCHAR(50),
+    content MEDIUMTEXT NOT NULL,
+    signer_snapshot TEXT,
+    counterparty_snapshot TEXT,
+    ip_address VARCHAR(64),
+    user_agent VARCHAR(255),
+    signed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_contracts_signer (signer_id, signed_at),
+    INDEX idx_contracts_counterparty (counterparty_id, signed_at),
+    INDEX idx_contracts_order (order_id),
+    INDEX idx_contracts_product (product_id),
+    FOREIGN KEY (signer_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (counterparty_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS reports (
