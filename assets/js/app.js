@@ -102,6 +102,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             currentUser: null,
             currentView: "",
             editingProductId: null,
+            contractTarget: "register",
             filters: {
                 users: { search: "", role: "all", status: "all" },
                 orders: { search: "", status: "all" },
@@ -375,8 +376,9 @@ const STORAGE_KEY = "myDillerUzStateV2";
             }
         }
 
-        function openContractModal(e) {
-            e.preventDefault();
+        function openContractModal(e, target = "register") {
+            e?.preventDefault();
+            STATE.contractTarget = target;
             const text = `
 <div style="font-size:0.85rem; line-height:1.6; max-height: 400px; overflow-y: auto; padding-right: 10px;">
 <b>HAMKORLIK VA XIZMAT KO'RSATISH SHARTNOMASI №___</b><br>
@@ -431,8 +433,28 @@ birgalikda «Tomonlar» deb ataladi, ushbu shartnomani quyidagilar to'g'risida t
 9.2. Avtomatik uzaytiriladi.<br><br>
 <b>10. YAKUNIY QOIDALAR</b><br>
 10.1. Nizolar muzokara orqali hal qilinadi.<br>
-10.2. O'zgarishlar kelishuv asosida kiritiladi.<br><br>
-<b>11. REKVIZITLAR</b><br>
+10.2. O'zgarishlar kelishuv asosida kiritiladi.<br>
+10.3. Elektron shaklda berilgan rozilik, buyurtma, tasdiq va xabarnomalar Tomonlar uchun yozma hujjat bilan teng kuchga ega hisoblanadi.<br>
+10.4. Platforma xizmatlaridan foydalanish davom etishi foydalanuvchining amaldagi qoidalarga roziligini bildiradi.<br><br>
+<b>11. MAXFIYLIK VA MA'LUMOTLARNI HIMOYA QILISH</b><br>
+11.1. Tomonlar shartnoma doirasida olingan tijorat, shaxsiy va moliyaviy ma'lumotlarni uchinchi shaxslarga asossiz oshkor qilmaydi.<br>
+11.2. Platforma foydalanuvchi ma'lumotlarini buyurtmalarni rasmiylashtirish, to'lovlarni nazorat qilish, yetkazib berish va texnik qo'llab-quvvatlash maqsadlarida qayta ishlashi mumkin.<br>
+11.3. Foydalanuvchi telefon raqami, STIR, bank rekvizitlari va boshqa kiritilgan ma'lumotlar to'g'riligiga shaxsan javobgar bo'ladi.<br><br>
+<b>12. YETKAZIB BERISH VA QABUL QILISH</b><br>
+12.1. Tovarlarni yetkazib berish muddati, usuli va mas'ul shaxslari buyurtma yoki Tomonlarning alohida kelishuvida belgilanadi.<br>
+12.2. Qabul qilish vaqtida aniqlangan kamchiliklar elektron tizim orqali darhol qayd etiladi.<br>
+12.3. Tovar sifati, komplektligi va kafolat hujjatlari bo'yicha talablar ishlab chiqaruvchi yoki sotuvchi zimmasida qoladi.<br><br>
+<b>13. TO'LOV, QARZDORLIK VA CHEKLOVLAR</b><br>
+13.1. To'lovlar naqd pulsiz hisob-kitob, kelishilgan muddatli to'lov yoki Platforma qo'llab-quvvatlaydigan boshqa usullar orqali amalga oshiriladi.<br>
+13.2. Kechiktirilgan to'lovlar reytingga, limitlarga va keyingi buyurtmalar shartlariga ta'sir qilishi mumkin.<br>
+13.3. Platforma xavfsizlik, qarzdorlik yoki noto'g'ri ma'lumot aniqlanganda xizmatlardan foydalanishni vaqtincha cheklashi mumkin.<br><br>
+<b>14. ELEKTRON XABARNOMALAR</b><br>
+14.1. SMS, telefon qo'ng'irog'i, platformadagi bildirishnoma yoki elektron xabar orqali yuborilgan ma'lumotlar rasmiy xabarnoma sifatida qabul qilinadi.<br>
+14.2. Foydalanuvchi aloqa ma'lumotlari o'zgarganda ularni platformada yangilashi shart.<br><br>
+<b>15. FORS-MAJOR</b><br>
+15.1. Tomonlar tabiiy ofat, uzilishlar, davlat organlari qarorlari, bank yoki aloqa tizimlaridagi nosozliklar kabi nazoratdan tashqari holatlar uchun javobgar bo'lmaydi.<br>
+15.2. Bunday holatlar yuzaga kelganda Tomonlar imkon qadar qisqa muddatda bir-birini xabardor qiladi va majburiyatlarni bajarish tartibini kelishadi.<br><br>
+<b>16. REKVIZITLAR</b><br>
 PLATFORMA:<br>
 «RoboTexnika» MCHJ<br>
 Direktor: Mirzayev Sardor<br>
@@ -452,11 +474,12 @@ Imzo: __
 
         function acceptContract() {
             closeModal();
-            const terms = document.getElementById("register-terms");
+            const target = STATE.contractTarget === "login" ? "login" : "register";
+            const terms = document.getElementById(target === "login" ? "login-terms" : "register-terms");
             if (terms) {
                 terms.disabled = false;
                 terms.checked = true;
-                const btn = document.getElementById("register-btn");
+                const btn = document.getElementById(target === "login" ? "login-btn" : "register-btn");
                 if (btn) btn.disabled = false;
             }
         }
@@ -464,10 +487,12 @@ Imzo: __
         async function doLogin() {
             const password = document.getElementById("login-password").value.trim();
             let phone = document.getElementById("login-phone").value.replace(/\D/g, "");
+            const terms = document.getElementById("login-terms") ? document.getElementById("login-terms").checked : true;
             
             if (phone.length === 9) phone = "998" + phone;
 
             if (!phone || !password) return showToast("Iltimos, ma'lumotlarni to'ldiring", "warning");
+            if (!terms) return showToast("Shartnomaga rozi bo'lishingiz kerak", "warning");
 
             try {
                 const btn = document.getElementById("login-btn");
@@ -487,7 +512,7 @@ Imzo: __
                 showToast(e.message, "danger");
                 const btn = document.getElementById("login-btn");
                 if (btn) {
-                    btn.disabled = false;
+                    btn.disabled = !(document.getElementById("login-terms")?.checked ?? true);
                     btn.innerHTML = "Kirish";
                 }
             }
@@ -781,6 +806,7 @@ Imzo: __
         function toggleNotifications(event) {
             event?.stopPropagation();
             toggleMobileMenu(false);
+            document.getElementById("profile-dropdown")?.classList.remove("open");
             document.getElementById("notification-dropdown")?.classList.toggle("open");
         }
 

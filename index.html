@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="stylesheet" href="assets/css/styles.css?v=15">
 </head>
 
 <body data-page="auth" data-root=".">
@@ -33,9 +33,14 @@
                     <input type="password" id="login-password" class="input-control" placeholder="Parol">
                 </div>
                 <div class="terms-row">
-                    <input type="checkbox" id="login-terms">
-                    <label for="login-terms" class="text-xs text-muted">Xizmat shartlari va maxfiylik siyosatiga
-                        roziman</label>
+                    <input type="checkbox" id="login-terms" disabled
+                        onchange="document.getElementById('login-btn').disabled = !this.checked">
+                    <label for="login-terms" class="text-xs text-muted" style="cursor:pointer;"
+                        onclick="openContractModal(event, 'login')">
+                        <span style="color:var(--primary); text-decoration:underline;">Hamkorlik va xizmat
+                            ko'rsatish shartnomasi</span>, maxfiylik siyosati va platforma qoidalari bilan tanishdim
+                        hamda roziman
+                    </label>
                 </div>
                 <button class="btn btn-primary w-full" id="login-btn" disabled onclick="doLogin()">Kirish</button>
                 <div class="auth-switch">
@@ -122,9 +127,10 @@
                     <div class="terms-row">
                         <input type="checkbox" id="register-terms" disabled
                             onchange="document.getElementById('register-btn').disabled = !this.checked">
-                        <label class="text-xs text-muted" style="cursor:pointer;" onclick="openContractModal(event)">
+                        <label class="text-xs text-muted" style="cursor:pointer;" onclick="openContractModal(event, 'register')">
                             <span style="color:var(--primary); text-decoration:underline;">Hamkorlik va xizmat
-                                ko'rsatish shartnomasi</span> bilan tanishdim va roziman
+                                ko'rsatish shartnomasi</span>, elektron oferta, maxfiylik siyosati, yetkazib berish va
+                            hisob-kitob qoidalari bilan to'liq tanishdim hamda roziman
                         </label>
                     </div>
                     <div class="grid-2 mt-4">
@@ -160,7 +166,7 @@
 
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="assets/js/app.js?v=15"></script>
+    <script src="assets/js/app.js?v=16"></script>
 </body>
 
 </html>
