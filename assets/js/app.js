@@ -508,22 +508,6 @@ Imzo: __
             }
         }
 
-        async function setupTestData() {
-            try {
-                const response = await apiFetch('api/test-data.php', 'POST');
-                if (response.success) {
-                    showToast("Test ma'lumotlar qo'shildi", "success");
-                    await refreshDB();
-                    navigate(STATE.currentView || MENU_CONFIG[STATE.currentUser.role]?.[0]?.id);
-                } else {
-                    showToast(response.message || "Xato yuz berdi", "error");
-                }
-            } catch (error) {
-                console.error("[v0] Setup error:", error);
-                showToast("Setup xatosi", "error");
-            }
-        }
-
         async function doLogout() {
             try {
                 await apiFetch('api/auth/logout.php', 'POST');
@@ -896,9 +880,7 @@ Imzo: __
                 <div class="section-head">
                     <div>
                         <h2>Admin dashboard</h2>
-                        <p class="text-sm text-muted mt-2">Boshlang'ich demo ma'lumotlar bo'sh. Register, katalog va buyurtmalar orqali ma'lumot yig'iladi.</p>
                     </div>
-                    <button class="btn btn-outline" onclick="setupTestData()"><i class="ri-settings-3-line"></i> Test ma'lumot</button>
                 </div>
                 <div class="grid-cards mb-6">
                     ${statCard("ri-group-line", "Foydalanuvchilar", `${DB.users.length} ta`, "text-info")}

@@ -1,45 +1,16 @@
 # My Diller UZ - O'rnatish Ko'rsatmalari
 
-## 1. Database O'rnatish
+## 1. Database o'rnatish
 
-MySQL databaseni yaratib, quyidagi SQL skriptlarni bajaring:
+MySQL databaseni yaratib, jadval va boshlang'ich admin yozuvini qo'shish uchun quyidagi skriptni bajaring:
 
 ```bash
-# Database va jadvallarini yaratish
 mysql -u root < database.sql
-
-# Test ma'lumotlarini qo'shish
-mysql -u root < insert-test-data.sql
 ```
 
-## 2. Test Ma'lumotlari
+Sotuvchi, diler, mahsulot va buyurtma ma'lumotlari tizimdan ro'yxatdan o'tish, katalog va buyurtma jarayonlari orqali yaratiladi.
 
-### Admin hisobi:
-- **Telefon:** 998901234567
-- **Parol:** admin
-- **Rol:** Admin
-
-### Seller hisobi:
-- **Telefon:** 998901234567
-- **Parol:** 123456
-- **Rol:** Seller
-
-### Buyer hisobi:
-- **ID:** u_buyer1
-- **Telefon:** 998903234567
-- **Parol:** 123456
-- **Rol:** Buyer
-
-## 3. Test Mahsulotlari
-
-Databaseda 3 ta test mahsulot qo'shildi:
-- Monitor 24" (MON-001) - 500,000 so'm
-- Ofis Stoli (DSK-001) - 1,000,000 so'm
-- Qurilish Mixi (BLD-001) - 250,000 so'm
-
-Rasmlar `/uploads/products/` papkasida saqlangan.
-
-## 4. Xususiyatlar
+## 2. Xususiyatlar
 
 ### Admin Panel:
 - Barcha mahsulotlarni ko'rish
@@ -61,7 +32,7 @@ Rasmlar `/uploads/products/` papkasida saqlangan.
 - Buyurtmalarni kuzatish
 - Foto hisobotlarni kuylash
 
-## 5. API Endpoints
+## 3. API Endpoints
 
 ### Authentication
 - `POST /api/auth/login.php` - Kirish
@@ -86,16 +57,9 @@ Rasmlar `/uploads/products/` papkasida saqlangan.
 - `POST /api/buyer/orders.php` - Buyurtma berish
 - `GET /api/buyer/orders.php` - O'z buyurtmalari
 
-## 6. Rasm Upload
+## 4. Rasm upload
 
-- Mahsulot rasmlar: `/uploads/products/` 
+- Mahsulot rasmlar: `/uploads/products/`
 - Hisobot rasmlar: `/uploads/reports/`
 - Rasm formati: JPG, PNG
 - Maksimal o'lcham: 5MB
-
-## 7. Debug
-
-Browser console-da `[v0]` xabarlarni ko'ring:
-```javascript
-console.log("[v0] Message")
-```
