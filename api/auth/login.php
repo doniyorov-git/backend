@@ -30,19 +30,7 @@ if ($user && $password === $user['password']) {
     $_SESSION['user'] = $user;
     
     sendJson(['success' => true, 'user' => $user]);
-} else {
-    // Admin override check (hardcoded fallback if DB is not seeded properly)
-    if ($phone == '998901234567' && $password == 'admin') {
-        $admin = [
-            'id' => 'u_admin',
-            'name' => 'Tizim Administratori',
-            'phone' => '998901234567',
-            'role' => 'admin',
-            'status' => 'active'
-        ];
-        $_SESSION['user'] = $admin;
-        sendJson(['success' => true, 'user' => $admin]);
-    }
-    sendJson(['success' => false, 'message' => 'Noto\'g\'ri login yoki parol'], 401);
 }
+
+sendJson(['success' => false, 'message' => 'Noto\'g\'ri login yoki parol'], 401);
 ?>
