@@ -177,6 +177,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 const mapContract = c => ({
                     ...c,
                     contractType: c.contract_type,
+                    contractNo: c.contract_no,
                     signerId: c.signer_id,
                     signerName: c.signer_name,
                     signerRole: c.signer_role,
@@ -286,6 +287,79 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 return `${day}.${month}.${year} ${hour}:${minute}`;
             }
             return raw;
+        }
+
+        const UZ_MONTH_LATIN = ["", "yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentyabr", "oktyabr", "noyabr", "dekabr"];
+
+        function parseIsoDateParts(value) {
+            const raw = String(value || "").trim();
+            const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (!m) return null;
+            return { y: m[1], mo: parseInt(m[2], 10), d: m[3] };
+        }
+
+        function toLatinPurposeText(text) {
+            const map = {
+                а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "yo", ж: "zh", з: "z", и: "i", й: "y",
+                к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f",
+                х: "x", ц: "ts", ч: "ch", ш: "sh", щ: "shch", ъ: "", ы: "i", ь: "", э: "e", ю: "yu", я: "ya",
+                ў: "o'", қ: "q", ғ: "g'", ҳ: "h",
+                А: "A", Б: "B", В: "V", Г: "G", Д: "D", Е: "E", Ё: "Yo", Ж: "Zh", З: "Z", И: "I", Й: "Y",
+                К: "K", Л: "L", М: "M", Н: "N", О: "O", П: "P", Р: "R", С: "S", Т: "T", У: "U", Ф: "F",
+                Х: "X", Ц: "Ts", Ч: "Ch", Ш: "Sh", Щ: "Shch", Ъ: "", Ы: "I", Ь: "", Э: "E", Ю: "Yu", Я: "Ya",
+                Ў: "O'", Қ: "Q", Ғ: "G'", Ҳ: "H"
+            };
+            let out = "";
+            for (const ch of String(text || "")) {
+                out += Object.prototype.hasOwnProperty.call(map, ch) ? map[ch] : ch;
+            }
+            return out.replace(/\s+/g, " ").trim();
+        }
+
+        function buyerOrderContractForOrder(orderId) {
+            return DB.contracts.find(c => c.contractType === "buyer_order" && c.orderId === orderId);
+        }
+
+        function latinPaymentPurposeForOrder(order, paymentKind) {
+            const contract = buyerOrderContractForOrder(order.id);
+            const signed = contract?.signedAt || contract?.signed_at || order.createdAt || order.created_at || today();
+            const parts = parseIsoDateParts(signed) || parseIsoDateParts(today());
+            const y = parts.y;
+            const mo = parts.mo >= 1 && parts.mo <= 12 ? parts.mo : 1;
+            const d = String(parts.d).padStart(2, "0");
+            const monthLatin = UZ_MONTH_LATIN[mo];
+            const rawNo = String(contract?.contractNo || contract?.contract_no || "").trim();
+            const num = rawNo || String(contract?.id || "").replace(/^ctr_/, "") || String(order.id || "");
+            const base = `${y}-yil "${d}" ${monthLatin}dagi ${num}-sonli shartnomaga asosan`;
+            if (paymentKind === "platform_commission") {
+                const yatt = toLatinPurposeText(platformParty().name);
+                return `${base} platforma xizmatlari uchun to'lov. Qabul qiluvchi YATT nomi: ${yatt}.`;
+            }
+            const sellerName = userById(order.sellerId).name || "";
+            const yatt = toLatinPurposeText(sellerName);
+            return `${base} mahsulot uchun to'lov. Qabul qiluvchi YATT nomi: ${yatt}.`;
+        }
+
+        function paymentPurposeLatinHtml(order, paymentKind) {
+            const text = latinPaymentPurposeForOrder(order, paymentKind);
+            const esc = escapeHtml(text);
+            return `<div class="payment-purpose-note" style="margin-top:1.25rem;text-align:left;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:1rem;">
+                <div class="text-xs text-muted" style="margin-bottom:0.35rem;">To'lov maqsadi (lotin alifbosi, bankka ko'chirish uchun):</div>
+                <div class="font-mono text-sm" style="white-space:pre-wrap;word-break:break-word;color:var(--text-dark);">${esc}</div>
+                <button type="button" class="btn btn-outline" style="margin-top:0.5rem;font-size:0.8rem;padding:0.35rem 0.75rem;min-height:0;" onclick="copyPaymentPurposeText('${order.id}', '${paymentKind}')"><i class="ri-file-copy-line"></i> Nusxalash</button>
+            </div>`;
+        }
+
+        async function copyPaymentPurposeText(orderId, paymentKind) {
+            const order = DB.orders.find(o => o.id === orderId);
+            if (!order) return;
+            const text = latinPaymentPurposeForOrder(order, paymentKind);
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast("To'lov maqsadi nusxalandi", "success");
+            } catch (e) {
+                showToast("Nusxalash muvaffaqiyatsiz", "warning");
+            }
         }
 
         function formatPhoneInput(input) {
@@ -1451,10 +1525,11 @@ const STORAGE_KEY = "myDillerUzStateV2";
                         </div>
                     </div>
                     ${contracts.length ? `<div class="table-responsive"><table>
-                        <thead><tr><th>Shartnoma</th><th>Tomonlar</th><th>Bog'lanish</th><th>Imzolangan vaqt</th><th>Amal</th></tr></thead>
+                        <thead><tr><th>Shartnoma</th><th>Raqam</th><th>Tomonlar</th><th>Bog'lanish</th><th>Imzolangan vaqt</th><th>Amal</th></tr></thead>
                         <tbody>${contracts.map(contract => `
                             <tr>
                                 <td><b>${escapeHtml(contract.title || contractTypeLabel(contract.contractType))}</b><div class="text-xs text-muted">${escapeHtml(contractTypeLabel(contract.contractType))}</div></td>
+                                <td class="text-sm font-mono">${escapeHtml(contract.contractNo || contract.contract_no || "—")}</td>
                                 <td>${escapeHtml(contractRelationText(contract))}</td>
                                 <td class="text-sm text-muted">
                                     ${contract.orderId ? `Buyurtma #${escapeHtml(contract.orderId)}` : ""}
@@ -1475,6 +1550,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             modal(escapeHtml(contract.title || contractTypeLabel(contract.contractType)), `
                 <div class="details-list mb-4">
                     <div class="details-row"><span class="details-label">Turi:</span><span class="details-value">${escapeHtml(contractTypeLabel(contract.contractType))}</span></div>
+                    ${contract.contractNo || contract.contract_no ? `<div class="details-row"><span class="details-label">Shartnoma raqami:</span><span class="details-value">${escapeHtml(contract.contractNo || contract.contract_no)}</span></div>` : ""}
                     <div class="details-row"><span class="details-label">Imzolovchi:</span><span class="details-value">${escapeHtml(contract.signerName || "Noma'lum")} (${escapeHtml(roleLabel(contract.signerRole))})</span></div>
                     ${contract.counterpartyName ? `<div class="details-row"><span class="details-label">Qarshi tomon:</span><span class="details-value">${escapeHtml(contract.counterpartyName)} (${escapeHtml(roleLabel(contract.counterpartyRole))})</span></div>` : ""}
                     ${contract.orderId ? `<div class="details-row"><span class="details-label">Buyurtma:</span><span class="details-value">#${escapeHtml(contract.orderId)}</span></div>` : ""}
@@ -1875,6 +1951,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     <div class="details-row"><span class="details-label">Sana:</span><span class="details-value">${escapeHtml(order.date || order.createdAt || "")}</span></div>
                     <div class="details-row"><span class="details-label">Holat:</span><span class="details-value">${statusBadge(order.status)}</span></div>
                     <div class="details-row"><span class="details-label">Jami:</span><span class="details-value text-primary">${money(order.total)}</span></div>
+                    ${orderContract && (orderContract.contractNo || orderContract.contract_no) ? `<div class="details-row"><span class="details-label">Shartnoma raqami:</span><span class="details-value">${escapeHtml(orderContract.contractNo || orderContract.contract_no)}</span></div>` : ""}
                 </div>
                 <h4 class="mb-2">Mahsulotlar</h4>
                 <div class="details-list">${items}</div>
@@ -1929,6 +2006,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                         <div class="font-bold text-primary" style="font-size:2rem;">${money(order.total)}</div>
                     </div>
                     <p class="text-xs text-muted mt-4">Iltimos, to'lovni yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
+                    ${paymentPurposeLatinHtml(order, "seller_goods")}
                 </div>`;
                 action = `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','buyer_paid')"><i class="ri-check-double-line"></i> To'ladim</button>`;
             } else if (type === "admin") {
@@ -1946,6 +2024,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                         <div class="font-bold text-primary" style="font-size:2rem;">${money(order.total * 0.05)}</div>
                     </div>
                     <p class="text-xs text-muted mt-4">Iltimos, komissiya to'lovini yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
+                    ${paymentPurposeLatinHtml(order, "platform_commission")}
                 </div>`;
                 action = `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','seller_paid_comm')"><i class="ri-check-double-line"></i> To'ladim</button>`;
             }
@@ -1986,6 +2065,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     <div class="font-bold text-primary" style="font-size:2rem;">${money(order.comm || order.total * 0.05)}</div>
                 </div>
                 <p class="text-xs text-muted mt-4">Iltimos, komissiya to'lovini yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
+                ${paymentPurposeLatinHtml(order, "platform_commission")}
             </div>`;
             const action = `<button class="btn btn-primary" onclick="markCommPaidBySeller('${order.id}')"><i class="ri-check-double-line"></i> To'ladim</button>`;
             
