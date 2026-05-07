@@ -3,6 +3,8 @@ USE mydilleruz;
 
 DROP TABLE IF EXISTS reports;
 DROP TABLE IF EXISTS notifications;
+DROP TABLE IF EXISTS ticket_replies;
+DROP TABLE IF EXISTS tickets;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS products;

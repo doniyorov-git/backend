@@ -18,9 +18,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     $tickets = $stmt->fetchAll();
     
-    // Fetch replies for each ticket
     foreach ($tickets as &$ticket) {
-        $rStmt = $pdo->prepare("SELECT author_name AS author, message AS text, DATE(created_at) AS date FROM ticket_replies WHERE ticket_id = ? ORDER BY created_at ASC");
+        $rStmt = $pdo->prepare("
+            SELECT author_name AS author, message AS text, created_at
+            FROM ticket_replies
+            WHERE ticket_id = ?
+            ORDER BY created_at ASC
+        ");
         $rStmt->execute([$ticket['id']]);
         $ticket['replies'] = $rStmt->fetchAll();
     }
