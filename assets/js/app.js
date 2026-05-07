@@ -1,0 +1,1627 @@
+const STORAGE_KEY = "myDillerUzStateV2";
+        const SESSION_KEY = "myDillerUzCurrentUser";
+        const PAGE_TYPE = document.body.dataset.page || "auth";
+        const PAGE_ROLE = document.body.dataset.role || "";
+        const ROOT_PATH = document.body.dataset.root || ".";
+
+        function rootUrl(path = "") {
+            const root = ROOT_PATH.replace(/\/$/, "");
+            const cleanPath = String(path || "").replace(/^\//, "");
+            return cleanPath ? `${root}/${cleanPath}` : root;
+        }
+
+        function imageUrl(imagePath = "") {
+            if (!imagePath) return "";
+            // If it's an absolute URL, return as is
+            if (imagePath.startsWith("http")) return imagePath;
+            // If it's a relative path, prepend root
+            return rootUrl(imagePath);
+        }
+
+        function dashboardUrl(role) {
+            const folder = role === "admin" ? "admin" : role;
+            return rootUrl(`dashboard/${folder}/index.html`);
+        }
+
+        function authUrl() {
+            return rootUrl("index.html");
+        }
+        const ADMIN_USER = {
+            id: "admin",
+            role: "admin",
+            inn: "000000000",
+            name: "Tizim Administratori",
+            status: "active",
+            phone: "+998000000000",
+            password: "admin",
+            address: "Toshkent"
+        };
+
+        const DEFAULT_CATEGORIES = [
+            { value: "electronics", label: "Elektronika", icon: "ri-computer-line" },
+            { value: "furniture", label: "Mebel", icon: "ri-armchair-line" },
+            { value: "appliances", label: "Maishiy texnika", icon: "ri-fridge-line" },
+            { value: "clothes", label: "Kiyim-kechak", icon: "ri-shirt-line" },
+            { value: "food", label: "Oziq-ovqat", icon: "ri-restaurant-line" },
+            { value: "beauty", label: "Go'zallik", icon: "ri-magic-line" },
+            { value: "building", label: "Qurilish mollari", icon: "ri-hammer-line" },
+            { value: "auto", label: "Avto ehtiyot qism", icon: "ri-car-line" },
+            { value: "stationery", label: "Kanselyariya", icon: "ri-pencil-ruler-line" },
+            { value: "toys", label: "O'yinchoqlar", icon: "ri-bear-smile-line" },
+            { value: "other", label: "Boshqa", icon: "ri-box-3-line" }
+        ];
+
+        const REGION_OPTIONS = [
+            "Toshkent shahri", "Toshkent viloyati", "Samarqand", "Buxoro", "Andijon", "Farg'ona", "Namangan",
+            "Qashqadaryo", "Surxondaryo", "Jizzax", "Sirdaryo", "Navoiy", "Xorazm", "Qoraqalpog'iston"
+        ];
+
+        const ORDER_FLOW = [
+            { value: "pending_seller_accept", label: "Buyurtma berildi" },
+            { value: "seller_accepted", label: "Sotuvchi qabul qildi" },
+            { value: "dispatched", label: "Yetkazib berishga berildi" },
+            { value: "delivered", label: "Yetkazildi" },
+            { value: "buyer_accepted", label: "Magazin qabul qildi" },
+            { value: "buyer_paid", label: "Xaridor to'ladi" },
+            { value: "trade_closed", label: "Savdo yakunlandi" },
+            { value: "seller_paid_comm", label: "Komissiya to'landi" },
+            { value: "paid", label: "Yakunlandi" }
+        ];
+
+        const MENU_CONFIG = {
+            admin: [
+                { id: "admin-dash", icon: "ri-dashboard-3-line", title: "Dashboard" },
+                { id: "admin-users", icon: "ri-group-line", title: "Foydalanuvchilar" },
+                { id: "admin-orders", icon: "ri-file-list-3-line", title: "Buyurtmalar" },
+                { id: "admin-products", icon: "ri-store-2-line", title: "Mahsulotlar" },
+                { id: "admin-comm", icon: "ri-money-dollar-circle-line", title: "Komissiya" },
+                { id: "admin-reports", icon: "ri-camera-lens-line", title: "Foto Hisobotlar" },
+                { id: "tickets", icon: "ri-scales-3-line", title: "Yordam" }
+            ],
+            seller: [
+                { id: "seller-dash", icon: "ri-dashboard-line", title: "Dashboard" },
+                { id: "seller-catalog", icon: "ri-function-line", title: "Mening Katalogim" },
+                { id: "seller-orders", icon: "ri-shopping-bag-3-line", title: "Sotuvlar" },
+                { id: "seller-finance", icon: "ri-wallet-3-line", title: "Moliya" },
+                { id: "tickets", icon: "ri-scales-3-line", title: "Yordam" }
+            ],
+            buyer: [
+                { id: "buyer-vitrina", icon: "ri-store-2-line", title: "Mahsulotlar" },
+                { id: "buyer-cart", icon: "ri-shopping-cart-line", title: "Savat" },
+                { id: "buyer-orders", icon: "ri-file-list-3-line", title: "Buyurtmalarim" },
+                { id: "buyer-reports", icon: "ri-camera-line", title: "Foto Hisobot" },
+                { id: "tickets", icon: "ri-scales-3-line", title: "Yordam" }
+            ]
+        };
+
+        const DB = {
+            users: [], products: [], orders: [], reports: [], tickets: [], categories: DEFAULT_CATEGORIES,
+            cart: JSON.parse(localStorage.getItem(STORAGE_KEY + "_cart") || "[]")
+        };
+        const STATE = {
+            currentUser: null,
+            currentView: "",
+            editingProductId: null,
+            filters: {
+                users: { search: "", role: "all", status: "all" },
+                orders: { search: "", status: "all" },
+                products: { search: "", category: "all", model: "all", seller: "all" },
+                sellerProducts: { search: "", category: "all", model: "all" },
+                reports: { search: "", status: "all" },
+                comm: { search: "", status: "all" }
+            }
+        };
+
+        async function apiFetch(endpoint, method = 'GET', data = null, isFormData = false) {
+            const options = { method };
+            if (data) {
+                if (isFormData) {
+                    options.body = data;
+                } else {
+                    options.headers = { 'Content-Type': 'application/json' };
+                    options.body = JSON.stringify(data);
+                }
+            }
+            const res = await fetch(rootUrl(endpoint), options);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.message || 'Server xatosi');
+            }
+            const resData = await res.json();
+            if (resData && resData.success === false) {
+                throw new Error(resData.message || 'Xatolik yuz berdi');
+            }
+            return resData;
+        }
+
+        async function refreshDB() {
+            if (!STATE.currentUser) return;
+            try {
+                const role = STATE.currentUser.role;
+                const mapUser = u => ({ ...u, bankAccount: u.bank_account, bankMfo: u.mfo });
+                const mapProduct = p => ({ ...p, sellerId: p.seller_id, viewCount: p.view_count, createdAt: p.created_at });
+                const mapOrder = o => ({ ...o, buyerId: o.buyer_id, sellerId: o.seller_id, commStatus: o.comm_status, dispatchReport: o.dispatch_report, createdAt: o.created_at, updatedAt: o.updated_at });
+                const mapReport = r => ({ ...r, sellerId: r.seller_id, orderId: r.order_id, prodId: r.prod_id, dueDate: r.due_date, createdAt: r.created_at });
+                const mapTicket = t => ({ ...t, userId: t.user_id, createdAt: t.created_at });
+
+                if (role === 'admin') {
+                    const [usersRes, dashRes, prodRes, tickRes] = await Promise.all([
+                        apiFetch('api/admin/users.php'),
+                        apiFetch('api/admin/dashboard.php'),
+                        apiFetch('api/admin/products.php'),
+                        apiFetch('api/tickets.php')
+                    ]);
+                    DB.users = (usersRes.data || []).map(mapUser);
+                    DB.orders = (dashRes.data || []).map(mapOrder);
+                    DB.products = (prodRes.data || []).map(mapProduct);
+                    DB.tickets = (tickRes.data || []).map(mapTicket);
+                } else if (role === 'seller') {
+                    const [prodRes, orderRes, repRes, tickRes] = await Promise.all([
+                        apiFetch('api/seller/products.php'),
+                        apiFetch('api/seller/orders.php'),
+                        apiFetch('api/seller/reports.php'),
+                        apiFetch('api/tickets.php')
+                    ]);
+                    DB.products = (prodRes.data || []).map(mapProduct);
+                    DB.orders = (orderRes.data || []).map(mapOrder);
+                    DB.reports = (repRes.data || []).map(mapReport);
+                    DB.tickets = (tickRes.data || []).map(mapTicket);
+                } else if (role === 'buyer') {
+                    const [prodRes, orderRes, tickRes] = await Promise.all([
+                        apiFetch('api/buyer/products.php'),
+                        apiFetch('api/buyer/orders.php'),
+                        apiFetch('api/tickets.php')
+                    ]);
+                    DB.products = (prodRes.data || []).map(mapProduct);
+                    DB.orders = (orderRes.data || []).map(mapOrder);
+                    DB.tickets = (tickRes.data || []).map(mapTicket);
+                }
+            } catch (e) {
+                console.error("Failed to refresh DB", e);
+                showToast("Ma'lumotlarni yuklashda xatolik: " + e.message, "danger");
+            }
+        }
+
+        function saveCart() {
+            localStorage.setItem(STORAGE_KEY + "_cart", JSON.stringify(DB.cart));
+        }
+
+        const money = amount => new Intl.NumberFormat("uz-UZ").format(Number(amount) || 0) + " UZS";
+        const today = () => new Date().toISOString().slice(0, 10);
+        const uid = prefix => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
+        const normalize = value => String(value || "").toLowerCase().trim();
+        const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+        const phoneDigits = value => String(value || "").replace(/\D/g, "").slice(0, 9);
+        const fullPhone = value => "+998" + phoneDigits(value);
+
+        function formatPhoneInput(input) {
+            const digits = phoneDigits(input.value);
+            input.value = digits.replace(/(\d{2})(\d{3})(\d{2})(\d{0,2})/, (_, a, b, c, d) => [a, b, c, d].filter(Boolean).join(" "));
+        }
+
+        function slugify(text) {
+            const latin = String(text || "")
+                .toLowerCase()
+                .replace(/g'/g, "g")
+                .replace(/o'/g, "o")
+                .replace(/sh/g, "sh")
+                .replace(/ch/g, "ch")
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "");
+            return latin || `category-${Date.now()}`;
+        }
+
+        function categoryByValue(value) {
+            return DB.categories.find(category => category.value === value) || DB.categories.find(category => category.value === "other") || DEFAULT_CATEGORIES.at(-1);
+        }
+
+        function userById(id) {
+            if (id === ADMIN_USER.id) return ADMIN_USER;
+            return DB.users.find(user => user.id === id) || { id, name: "Noma'lum", role: "", status: "" };
+        }
+
+        function productById(id) {
+            return DB.products.find(product => product.id === id);
+        }
+
+        function roleLabel(role) {
+            return { admin: "Admin", seller: "Sotuvchi", buyer: "Diler" }[role] || role;
+        }
+
+        function statusBadge(status) {
+            const map = {
+                active: ["Faol", "badge-active"],
+                blocked: ["Blok", "badge-danger"],
+                pending_seller_accept: ["Buyurtma berildi", "badge-warning"],
+                seller_accepted: ["Qabul qilindi", "badge-info"],
+                dispatched: ["Yetkazishga berildi", "badge-info"],
+                delivered: ["Yetkazildi", "badge-info"],
+                buyer_accepted: ["Qabul qilindi", "badge-success"],
+                buyer_paid: ["Xaridor to'ladi", "badge-success"],
+                trade_closed: ["Savdo yakunlandi", "badge-active"],
+                seller_paid_comm: ["Komissiya to'landi", "badge-info"],
+                pending_admin: ["Tasdiq kutilmoqda", "badge-warning"],
+                paid: ["Yakunlandi", "badge-active"],
+                pending: ["Kutilmoqda", "badge-warning"],
+                overdue: ["Kechikkan", "badge-danger"],
+                done: ["Bajarildi", "badge-active"],
+                open: ["Ochiq", "badge-info"]
+            };
+            const item = map[status] || [status || "Noma'lum", "badge-muted"];
+            return `<span class="badge ${item[1]}">${item[0]}</span>`;
+        }
+
+        function showToast(message, type = "success") {
+            const icons = { success: "ri-checkbox-circle-fill", warning: "ri-error-warning-fill", info: "ri-information-fill", danger: "ri-close-circle-fill" };
+            const colors = { success: "var(--success)", warning: "var(--warning)", info: "var(--info)", danger: "var(--danger)" };
+            const toast = document.createElement("div");
+            toast.className = "toast";
+            toast.style.borderLeftColor = colors[type] || "var(--primary)";
+            toast.innerHTML = `<i class="${icons[type] || icons.info}" style="color:${colors[type] || "var(--primary)"};font-size:1.35rem;"></i><span>${escapeHtml(message)}</span>`;
+            document.getElementById("toast-container").appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = "0";
+                setTimeout(() => toast.remove(), 220);
+            }, 2800);
+        }
+
+        function switchAuth(tab) {
+            document.getElementById("login-form").classList.toggle("hidden", tab !== "login");
+            document.getElementById("register-form").classList.toggle("hidden", tab !== "register");
+            if (tab === "register") {
+                nextRegStep(1);
+            }
+        }
+
+        function nextRegStep(step) {
+            if (step === 2) {
+                const name = document.getElementById("reg-name")?.value.trim();
+                const inn = document.getElementById("reg-inn")?.value.trim();
+                if (!name || !inn || inn.length !== 9) {
+                    showToast("Kompaniya nomi va INN (9 ta raqam) ni to'g'ri kiriting", "warning");
+                    return;
+                }
+            } else if (step === 3) {
+                const bankAcc = document.getElementById("reg-bank-acc")?.value.trim();
+                const bankMfo = document.getElementById("reg-bank-mfo")?.value.trim();
+                if (!bankAcc || bankAcc.length !== 20 || !bankMfo || bankMfo.length !== 5) {
+                    showToast("Bank rekvizitlarini to'g'ri kiriting (Hisob: 20 ta, MFO: 5 ta raqam)", "warning");
+                    return;
+                }
+            }
+
+            document.getElementById("reg-step-1")?.classList.add("hidden");
+            document.getElementById("reg-step-2")?.classList.add("hidden");
+            document.getElementById("reg-step-3")?.classList.add("hidden");
+            document.getElementById("reg-step-" + step)?.classList.remove("hidden");
+            
+            const dot1 = document.getElementById("step-dot-1");
+            const dot2 = document.getElementById("step-dot-2");
+            const dot3 = document.getElementById("step-dot-3");
+            
+            if (dot1) {
+                dot1.style.background = step >= 1 ? "var(--primary)" : "white";
+                dot1.style.color = step >= 1 ? "white" : "var(--muted)";
+                dot1.style.borderColor = step >= 1 ? "var(--primary)" : "var(--border)";
+            }
+            if (dot2) {
+                dot2.style.background = step >= 2 ? "var(--primary)" : "white";
+                dot2.style.color = step >= 2 ? "white" : "var(--muted)";
+                dot2.style.borderColor = step >= 2 ? "var(--primary)" : "var(--border)";
+            }
+            if (dot3) {
+                dot3.style.background = step >= 3 ? "var(--primary)" : "white";
+                dot3.style.color = step >= 3 ? "white" : "var(--muted)";
+                dot3.style.borderColor = step >= 3 ? "var(--primary)" : "var(--border)";
+            }
+            
+            const desc = document.getElementById("reg-step-desc");
+            if (desc) {
+                if (step === 1) desc.textContent = "Kompaniya ma'lumotlari";
+                if (step === 2) desc.textContent = "Bank rekvizitlari";
+                if (step === 3) desc.textContent = "Aloqa va xavfsizlik";
+            }
+        }
+
+        function openContractModal(e) {
+            e.preventDefault();
+            const text = `
+<div style="font-size:0.85rem; line-height:1.6; max-height: 400px; overflow-y: auto; padding-right: 10px;">
+<b>HAMKORLIK VA XIZMAT KO'RSATISH SHARTNOMASI №___</b><br>
+sh. __ «_» ____ 2026 y.<br><br>
+<b>1. SHARTNOMA TOMONLARI</b><br>
+1.1. «RoboTexnika» MCHJ, direktor Mirzayev Sardor, Ustav asosida ish yurituvchi, keyingi o'rinlarda «Platforma» deb yuritiladi, bir tomondan,<br>
+1.2. ________, keyingi o'rinlarda «Ishlab chiqaruvchi» deb yuritiladi, ikkinchi tomondan,<br>
+birgalikda «Tomonlar» deb ataladi, ushbu shartnomani quyidagilar to'g'risida tuzdilar.<br><br>
+<b>2. SHARTNOMA PREDMETI</b><br>
+2.1. Platforma Ishlab chiqaruvchiga quyidagi xizmatlarni ko'rsatadi:<br>
+— chakana savdo nuqtalarini jalb qilish (keyingi o'rinlarda «Mijozlar»);<br>
+— savdolarni kuzatib borish;<br>
+— yetkazib berish va to'lovlar hisobini yuritish;<br>
+— tahliliy ma'lumotlar va reyting tizimini taqdim etish;<br>
+— kafolatli hisob-kitoblarni ta'minlash.<br>
+2.2. Ishlab chiqaruvchi tovarlarni savdo nuqtalariga mustaqil ravishda yoki kelishilgan kanallar orqali yetkazib beradi.<br>
+2.3. Tovar bir vaqtning o'zida bir nechta savdo nuqtalarida sotilishi mumkin.<br><br>
+<b>3. KOMISSIYA MUKOFOTI</b><br>
+3.1. Platforma yakuniy xaridor tomonidan to'langan tovar qiymatining 5% (besh foiz) miqdorida haq oladi.<br>
+3.2. Komissiya hisoblash uchun asos — Ishlab chiqaruvchining hisob raqamiga pul tushumi hisoblanadi.<br>
+3.3. Komissiya faqat tasdiqlangan va to'langan bitimlar bo'yicha hisoblanadi.<br><br>
+<b>4. HISOB-KITOB TARTIBI</b><br>
+4.1. Ishlab chiqaruvchi Platformaga haftasiga kamida bir marta hisobot taqdim etadi.<br>
+4.2. Hisobot asosida Tomonlar o'rtasida solishtirma dalolatnoma tuziladi.<br>
+4.3. Komissiya to'lovi 5 (besh) kalendar kuni ichida amalga oshiriladi.<br><br>
+<b>5. KAFOLAT MAJBURIYATLARI</b><br>
+5.1. Platforma hisob-kitoblarni nazorat qiladi.<br>
+5.2. Mijoz to'lovni kechiktirsa, Platforma vaqtincha qarzni qoplashi mumkin.<br>
+5.3. Bu mablag' keyinchalik qaytariladi.<br>
+5.4. Kafolat limitlari Platformaning ichki qoidalariga bog'liq.<br><br>
+<b>6. REYTING TIZIMI</b><br>
+6.1. Platforma reyting tizimini yuritadi.<br>
+6.2. Reyting quyidagilar asosida baholanadi:<br>
+— to'lov intizomi<br>
+— savdo hajmi<br>
+— hisobotlar<br>
+— kechiktirishlar<br>
+6.3. Reyting ta'sir qiladi:<br>
+— limitlarga<br>
+— shartlarga<br>
+— kafolatlarga<br>
+6.4. Reyting ma'lumotlari ichki tizim hisoblanadi.<br><br>
+<b>7. ELEKTRON TIZIM</b><br>
+7.1. Barcha operatsiyalar elektron tizimda yuritiladi.<br>
+7.2. Ushbu ma'lumotlar rasmiy hisoblanadi.<br>
+7.3. Tasdiqlangan ma'lumotlar haqiqiy deb qabul qilinadi.<br><br>
+<b>8. JAVOBGARLIK</b><br>
+8.1. Tomonlar ma'lumotlar uchun javobgar.<br>
+8.2. Xato bo'lsa, bartaraf etiladi.<br><br>
+<b>9. MUDDAT</b><br>
+9.1. Shartnoma 12 oy amal qiladi.<br>
+9.2. Avtomatik uzaytiriladi.<br><br>
+<b>10. YAKUNIY QOIDALAR</b><br>
+10.1. Nizolar muzokara orqali hal qilinadi.<br>
+10.2. O'zgarishlar kelishuv asosida kiritiladi.<br><br>
+<b>11. REKVIZITLAR</b><br>
+PLATFORMA:<br>
+«RoboTexnika» MCHJ<br>
+Direktor: Mirzayev Sardor<br>
+STIR: __<br>
+H/r: __<br>
+Manzil: __<br>
+Imzo: __<br><br>
+ISHLAB CHIQARUVCHI:<br>
+Nomi: __<br>
+STIR: __<br>
+H/r: __<br>
+Manzil: __<br>
+Imzo: __
+</div>`;
+            modal("Hamkorlik Shartnomasi", text, `<button class="btn btn-outline" onclick="closeModal()">Yopish</button><button class="btn btn-primary" onclick="acceptContract()">Roziman</button>`);
+        }
+
+        function acceptContract() {
+            closeModal();
+            const terms = document.getElementById("register-terms");
+            if (terms) {
+                terms.disabled = false;
+                terms.checked = true;
+                const btn = document.getElementById("register-btn");
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function doLogin() {
+            const password = document.getElementById("login-password").value.trim();
+            let phone = document.getElementById("login-phone").value.replace(/\D/g, "");
+            
+            if (phone.length === 9) phone = "998" + phone;
+
+            if (!phone || !password) return showToast("Iltimos, ma'lumotlarni to'ldiring", "warning");
+
+            try {
+                const btn = document.getElementById("login-btn");
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Kuting...`;
+                }
+                
+                const res = await apiFetch('api/auth/login.php', 'POST', { phone, password });
+                if (res.success) {
+                    STATE.currentUser = res.user;
+                    localStorage.setItem(SESSION_KEY, JSON.stringify(res.user));
+                    showToast("Tizimga kirdingiz", "success");
+                    setTimeout(() => window.location.href = dashboardUrl(res.user.role), 300);
+                }
+            } catch (e) {
+                showToast(e.message, "danger");
+                const btn = document.getElementById("login-btn");
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = "Kirish";
+                }
+            }
+        }
+
+        async function doRegister() {
+            const name = document.getElementById("reg-name").value.trim();
+            const inn = document.getElementById("reg-inn").value.trim();
+            let phone = document.getElementById("reg-phone").value.replace(/\D/g, "");
+            const password = document.getElementById("reg-password").value.trim();
+            const role = document.getElementById("reg-role").value;
+            const bankAcc = document.getElementById("reg-bank-acc") ? document.getElementById("reg-bank-acc").value.trim() : "";
+            const bankMfo = document.getElementById("reg-bank-mfo") ? document.getElementById("reg-bank-mfo").value.trim() : "";
+            const terms = document.getElementById("register-terms") ? document.getElementById("register-terms").checked : true;
+
+            if (!name || !inn || phone.length !== 9 || password.length < 4 || !bankAcc || !bankMfo) {
+                showToast("Barcha maydonlarni to'g'ri to'ldiring", "warning");
+                return;
+            }
+            if (!terms) {
+                showToast("Shartnomaga rozi bo'lishingiz kerak", "warning");
+                return;
+            }
+            
+            phone = "998" + phone;
+
+            try {
+                const btn = document.getElementById("register-btn");
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Kuting...`;
+                }
+                
+                const res = await apiFetch('api/auth/register.php', 'POST', {
+                    role, name, inn, bank_account: bankAcc, mfo: bankMfo, phone, password
+                });
+                
+                if (res.success) {
+                    STATE.currentUser = res.user;
+                    localStorage.setItem(SESSION_KEY, JSON.stringify(res.user));
+                    showToast("Muvaffaqiyatli ro'yxatdan o'tdingiz", "success");
+                    setTimeout(() => window.location.href = dashboardUrl(res.user.role), 300);
+                }
+            } catch(e) {
+                showToast(e.message, "danger");
+                const btn = document.getElementById("register-btn");
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = "Yakunlash";
+                }
+            }
+        }
+
+        async         async function setupTestData() {
+            try {
+                const response = await apiFetch('api/test-data.php', 'POST');
+                if (response.success) {
+                    showToast("Test ma'lumotlar qo'shildi", "success");
+                    await refreshDB();
+                    navigate(STATE.currentPage);
+                } else {
+                    showToast(response.message || "Xato yuz berdi", "error");
+                }
+            } catch (error) {
+                console.error("[v0] Setup error:", error);
+                showToast("Setup xatosi", "error");
+            }
+        }
+
+        function doLogout() {
+            try {
+                await apiFetch('api/auth/logout.php', 'POST');
+            } catch(e) {}
+            STATE.currentUser = null;
+            localStorage.removeItem(SESSION_KEY);
+            window.location.href = authUrl();
+        }
+
+        async function initApp() {
+            STATE.currentUser = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+            
+            if (PAGE_TYPE === "auth") {
+                document.getElementById("auth-layout")?.classList.remove("hidden");
+                if (STATE.currentUser) {
+                    window.location.replace(dashboardUrl(STATE.currentUser.role));
+                    return;
+                }
+                const logPhone = document.getElementById("login-phone");
+                if (logPhone) formatPhoneInput(logPhone);
+                const regPhone = document.getElementById("reg-phone");
+                if (regPhone) formatPhoneInput(regPhone);
+            } else if (PAGE_TYPE === "dashboard") {
+                document.getElementById("app-layout")?.classList.remove("hidden");
+                if (!STATE.currentUser || STATE.currentUser.role !== PAGE_ROLE) {
+                    window.location.replace(authUrl());
+                    return;
+                }
+                const nameEl = document.getElementById("topbar-user-name");
+                if (nameEl) nameEl.textContent = STATE.currentUser.name;
+                const roleEl = document.getElementById("topbar-user-role");
+                if (roleEl) roleEl.textContent = roleLabel(STATE.currentUser.role);
+                const avatarEl = document.getElementById("topbar-avatar");
+                if (avatarEl && STATE.currentUser.name) avatarEl.textContent = STATE.currentUser.name.charAt(0).toUpperCase();
+                
+                renderMenus();
+                
+                await refreshDB();
+
+                const menu = MENU_CONFIG[STATE.currentUser.role];
+                if (menu && menu.length) {
+                    navigate(menu[0].id);
+                }
+            }
+        }
+
+        function renderMenus() {
+            const menu = MENU_CONFIG[STATE.currentUser.role] || [];
+            const html = menu.map(item => `
+                <button class="menu-item" data-view="${item.id}" onclick="navigate('${item.id}')">
+                    <i class="${item.icon}"></i><span>${item.title}</span>
+                </button>
+            `).join("");
+            const mobileHtml = menu.map(item => `
+                <button class="mobile-menu-option" data-view="${item.id}" onclick="navigate('${item.id}');toggleMobileMenu(false)">
+                    <i class="${item.icon}"></i><span>${item.title}</span>
+                </button>
+            `).join("");
+            document.getElementById("sidebar-menu").innerHTML = html;
+            document.getElementById("mobile-menu-dropdown").innerHTML = mobileHtml;
+        }
+
+        function toggleMobileMenu(force) {
+            const dropdown = document.getElementById("mobile-menu-dropdown");
+            dropdown.classList.toggle("open", typeof force === "boolean" ? force : !dropdown.classList.contains("open"));
+        }
+
+        function navigate(viewId) {
+            STATE.currentView = viewId;
+            const menu = MENU_CONFIG[STATE.currentUser.role] || [];
+            const item = menu.find(entry => entry.id === viewId);
+            document.getElementById("page-title").textContent = item ? item.title : "Dashboard";
+            document.querySelectorAll("[data-view]").forEach(el => el.classList.toggle("active", el.dataset.view === viewId));
+            renderCurrentView();
+        }
+
+        function renderCurrentView() {
+            const container = document.getElementById("view-area");
+            const renderers = {
+                "admin-dash": renderAdminDash,
+                "admin-users": renderAdminUsers,
+                "admin-orders": renderAdminOrders,
+                "admin-products": renderAdminProducts,
+                "admin-comm": renderAdminComm,
+                "admin-reports": renderAdminReports,
+                "seller-dash": renderSellerDash,
+                "seller-catalog": renderSellerCatalog,
+                "seller-orders": renderSellerOrders,
+                "seller-finance": renderSellerFinance,
+                "buyer-vitrina": renderBuyerVitrina,
+                "buyer-cart": renderBuyerCart,
+                "buyer-orders": renderBuyerOrders,
+                "buyer-reports": renderBuyerReports,
+                tickets: renderTickets
+            };
+            if (renderers[STATE.currentView]) renderers[STATE.currentView](container);
+        }
+
+        function filterSelect(id, value, options, onChange) {
+            return `<select class="input-control" id="${id}" onchange="${onChange}(this.value)">
+                ${options.map(option => `<option value="${escapeHtml(option.value)}" ${option.value === value ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
+            </select>`;
+        }
+
+        function categoryOptions(includeAll = true) {
+            const options = DB.categories.map(category => ({ value: category.value, label: category.label }));
+            return includeAll ? [{ value: "all", label: "Barcha kategoriyalar" }, ...options] : options;
+        }
+
+        function sellerOptions(includeAll = true) {
+            const sellers = DB.users.filter(user => user.role === "seller");
+            const options = sellers.map(user => ({ value: user.id, label: user.name }));
+            return includeAll ? [{ value: "all", label: "Barcha sotuvchilar" }, ...options] : options;
+        }
+
+        function orderStatusOptions(includeAll = true) {
+            const options = ORDER_FLOW.map(item => ({ value: item.value, label: item.label }));
+            return includeAll ? [{ value: "all", label: "Barcha holatlar" }, ...options] : options;
+        }
+
+        function modal(title, body, footer = `<button class="btn btn-outline" onclick="closeModal()">Yopish</button>`) {
+            document.getElementById("modal-title").innerHTML = title;
+            document.getElementById("modal-body").innerHTML = body;
+            document.getElementById("modal-footer").innerHTML = footer;
+            document.getElementById("main-modal").classList.add("active");
+        }
+
+        function closeModal() {
+            document.getElementById("main-modal").classList.remove("active");
+        }
+
+        function statCard(icon, label, value, tone = "text-primary") {
+            return `<div class="card">
+                <div class="text-sm text-muted flex items-center gap-2"><i class="${icon} ${tone}"></i>${label}</div>
+                <div class="font-bold mt-2" style="font-size:1.45rem;">${value}</div>
+            </div>`;
+        }
+
+        function monthBuckets(count = 6) {
+            const names = ["Yan", "Fev", "Mar", "Apr", "May", "Iyun", "Iyul", "Avg", "Sen", "Okt", "Noy", "Dek"];
+            const now = new Date();
+            return Array.from({ length: count }, (_, index) => {
+                const date = new Date(now.getFullYear(), now.getMonth() - (count - 1 - index), 1);
+                const month = date.getMonth() + 1;
+                return {
+                    key: `${date.getFullYear()}-${String(month).padStart(2, "0")}`,
+                    label: names[date.getMonth()]
+                };
+            });
+        }
+
+        function orderMonthKey(order) {
+            const date = new Date(order.date || order.createdAt || order.updatedAt || Date.now());
+            if (Number.isNaN(date.getTime())) return "";
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        }
+
+        function monthlyOrderTotals(orders, field = "total") {
+            return monthBuckets().map(month => ({
+                label: month.label,
+                value: orders
+                    .filter(order => orderMonthKey(order) === month.key)
+                    .reduce((sum, order) => sum + Number(order[field] || 0), 0)
+            }));
+        }
+
+        function dayBuckets(count = 7) {
+            const names = ["Yak", "Dush", "Sesh", "Chor", "Pay", "Jum", "Shan"];
+            const now = new Date();
+            return Array.from({ length: count }, (_, index) => {
+                const date = new Date();
+                date.setDate(now.getDate() - (count - 1 - index));
+                return {
+                    key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
+                    label: names[date.getDay()]
+                };
+            });
+        }
+
+        function orderDayKey(order) {
+            const date = new Date(order.date || order.createdAt || order.updatedAt || Date.now());
+            if (Number.isNaN(date.getTime())) return "";
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        }
+
+        function dailyOrderTotals(orders, field = "total") {
+            return dayBuckets().map(day => ({
+                label: day.label,
+                value: orders
+                    .filter(order => orderDayKey(order) === day.key)
+                    .reduce((sum, order) => sum + Number(order[field] || 0), 0)
+            }));
+        }
+
+        function barChartCard(title, subtitle, rows, tone = "") {
+            const max = Math.max(1, ...rows.map(row => Number(row.value) || 0));
+            const bars = rows.map(row => {
+                const width = Math.max(row.value > 0 ? 8 : 0, Math.round((Number(row.value) || 0) / max * 100));
+                return `<div class="chart-row">
+                    <span>${escapeHtml(row.label)}</span>
+                    <div class="chart-track"><div class="chart-fill ${tone}" style="width:${width}%;"></div></div>
+                    <b>${money(row.value)}</b>
+                </div>`;
+            }).join("");
+            return `<div class="card chart-card">
+                <div>
+                    <h3>${escapeHtml(title)}</h3>
+                    <p class="text-sm text-muted mt-2">${escapeHtml(subtitle)}</p>
+                </div>
+                <div class="bar-chart">${bars}</div>
+            </div>`;
+        }
+
+        function commissionStatusCard(orders) {
+            const paid = orders.filter(order => order.commStatus === "paid").reduce((sum, order) => sum + Number(order.comm || 0), 0);
+            const pending = orders.filter(order => order.commStatus !== "paid").reduce((sum, order) => sum + Number(order.comm || 0), 0);
+            const total = paid + pending;
+            const paidAngle = total ? Math.round(paid / total * 360) : 0;
+            return `<div class="card chart-card">
+                <div>
+                    <h3>Komissiya holati</h3>
+                    <p class="text-sm text-muted mt-2">To'langan va to'lanmagan komissiyalar</p>
+                </div>
+                <div class="donut-wrap">
+                    <div class="donut-chart" style="--paid-angle:${paidAngle}deg;">
+                        <div class="donut-center">
+                            <div class="font-bold">${total ? Math.round(paid / total * 100) : 0}%</div>
+                            <div class="text-xs text-muted">to'langan</div>
+                        </div>
+                    </div>
+                    <div class="legend-list">
+                        <div class="legend-item"><span class="legend-name"><span class="legend-dot" style="background:var(--success)"></span> To'langan</span><b>${money(paid)}</b></div>
+                        <div class="legend-item"><span class="legend-name"><span class="legend-dot" style="background:var(--warning)"></span> To'lanmagan</span><b>${money(pending)}</b></div>
+                        <div class="legend-item"><span class="legend-name"><span class="legend-dot"></span> Jami</span><b>${money(total)}</b></div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function adminProfitChartCard(orders) {
+            const totalCommission = orders.reduce((sum, order) => sum + Number(order.comm || 0), 0);
+            const companyProfit = orders.filter(order => order.commStatus === "paid").reduce((sum, order) => sum + Number(order.comm || 0), 0);
+            const pendingCommission = totalCommission - companyProfit;
+            return barChartCard("Komissiya va kompaniya foydasi", "Kompaniya foydasi to'langan komissiya asosida hisoblanadi", [
+                { label: "Komissiya", value: totalCommission },
+                { label: "Foyda", value: companyProfit },
+                { label: "Kutilmoqda", value: pendingCommission }
+            ], "info");
+        }
+
+        function weeklyProfitChartCard(orders) {
+            return barChartCard("Haftalik savdo hajmi", "Oxirgi 7 kunlik buyurtmalar summasi", dailyOrderTotals(orders), "success");
+        }
+
+        function lineChartCard(orders) {
+            const months = monthlyOrderTotals(orders, "total");
+            const comms = monthlyOrderTotals(orders, "comm");
+            
+            let maxVal = Math.max(1, ...months.map(m => m.value));
+            
+            const width = 800;
+            const height = 180;
+            const stepX = width / Math.max(1, (months.length - 1));
+            
+            const points1 = months.map((m, i) => `${i * stepX},${height - (m.value / maxVal) * height}`).join(" ");
+            const points2 = comms.map((m, i) => `${i * stepX},${height - (m.value / maxVal) * height}`).join(" ");
+            
+            return `<div class="card chart-card full-width-chart">
+                <div>
+                    <h3>Savdo va Komissiya dinamikasi</h3>
+                    <p class="text-sm text-muted mt-2">Oylik buyurtmalar hajmi va komissiya o'sishi</p>
+                </div>
+                <div style="overflow-x:auto; padding-top:1rem; padding-bottom: 0.5rem; width:100%;">
+                    <svg viewBox="-20 -10 ${width + 40} ${height + 30}" style="width:100%; height:auto; min-width:500px; overflow:visible;">
+                        <polyline fill="none" stroke="var(--primary)" stroke-width="3" points="${points1}" stroke-linecap="round" stroke-linejoin="round"/>
+                        <polyline fill="none" stroke="var(--warning)" stroke-width="3" points="${points2}" stroke-linecap="round" stroke-linejoin="round"/>
+                        ${months.map((m, i) => `<circle cx="${i * stepX}" cy="${height - (m.value / maxVal) * height}" r="5" fill="white" stroke="var(--primary)" stroke-width="2"/>
+                                                <text x="${i * stepX}" y="${height + 20}" font-size="12" fill="var(--muted)" font-weight="700" text-anchor="middle">${m.label}</text>`).join("")}
+                        ${comms.map((m, i) => `<circle cx="${i * stepX}" cy="${height - (m.value / maxVal) * height}" r="5" fill="white" stroke="var(--warning)" stroke-width="2"/>`).join("")}
+                    </svg>
+                </div>
+                <div class="legend-list" style="display:flex;gap:1.5rem;justify-content:center;margin-top:0.5rem;">
+                    <div class="legend-item"><span class="legend-dot" style="background:var(--primary)"></span> Savdo hajmi</div>
+                    <div class="legend-item"><span class="legend-dot" style="background:var(--warning)"></span> Komissiya</div>
+                </div>
+            </div>`;
+        }
+
+        function dashboardChartsHtml(orders, includeAdminProfit = false) {
+            return `<div class="chart-grid mb-6">
+                ${barChartCard("Oylik aylanma", "Oxirgi 6 oy buyurtma summalari", monthlyOrderTotals(orders), "")}
+                ${commissionStatusCard(orders)}
+                ${includeAdminProfit ? adminProfitChartCard(orders) : ""}
+                ${includeAdminProfit ? weeklyProfitChartCard(orders) : ""}
+                ${includeAdminProfit ? lineChartCard(orders) : ""}
+            </div>`;
+        }
+
+        function renderAdminDash(container) {
+            const activeOrders = DB.orders.filter(order => order.status !== "paid").length;
+            const pendingComm = DB.orders.filter(order => order.commStatus === "pending").reduce((sum, order) => sum + order.comm, 0);
+            container.innerHTML = `
+                <div class="section-head">
+                    <div>
+                        <h2>Admin dashboard</h2>
+                        <p class="text-sm text-muted mt-2">Boshlang'ich demo ma'lumotlar bo'sh. Register, katalog va buyurtmalar orqali ma'lumot yig'iladi.</p>
+                    </div>
+                    <button class="btn btn-danger" onclick="resetAllData()"><i class="ri-delete-bin-6-line"></i> Ma'lumotlarni tozalash</button>
+                </div>
+                <div class="grid-cards mb-6">
+                    ${statCard("ri-group-line", "Foydalanuvchilar", `${DB.users.length} ta`, "text-info")}
+                    ${statCard("ri-store-2-line", "Mahsulotlar", `${DB.products.length} ta`, "text-success")}
+                    ${statCard("ri-file-list-3-line", "Faol buyurtmalar", `${activeOrders} ta`, "text-warning")}
+                    ${statCard("ri-money-dollar-circle-line", "Kutilayotgan komissiya", money(pendingComm), "text-primary")}
+                </div>
+                ${dashboardChartsHtml(DB.orders, true)}
+                <div class="card">
+                    <h3 class="mb-2">Ma'lumotlar holati</h3>
+                    ${DB.users.length || DB.products.length || DB.orders.length
+                        ? `<p class="text-muted">Tizimda foydalanuvchi, mahsulot yoki buyurtma mavjud. Menyudan kerakli bo'limga o'tib filterlardan foydalaning.</p>`
+                        : `<div class="empty-state"><i class="ri-inbox-line"></i><b>Admin ma'lumotlari bo'sh</b><div class="mt-2">Foydalanuvchilar, buyurtmalar, komissiya va hisobotlar hozircha yo'q.</div></div>`}
+                </div>
+            `;
+        }
+
+        function renderAdminUsers(container) {
+            const f = STATE.filters.users;
+            const users = DB.users.filter(user => {
+                const haystack = normalize([user.name, user.inn, user.phone, user.address].join(" "));
+                return (!f.search || haystack.includes(normalize(f.search)))
+                    && (f.role === "all" || user.role === f.role)
+                    && (f.status === "all" || user.status === f.status);
+            });
+            container.innerHTML = `
+                <div class="card">
+                    <div class="section-head">
+                        <div>
+                            <h3>Foydalanuvchilar</h3>
+                            <p class="text-sm text-muted">${users.length} ta natija</p>
+                        </div>
+                    </div>
+                    <div class="filter-toolbar">
+                        <div class="input-group" style="margin:0;">
+                            <label>Qidirish</label>
+                            <div class="search-field"><i class="ri-search-line"></i><input class="input-control" value="${escapeHtml(f.search)}" oninput="setFilter('users','search',this.value)" placeholder="Kompaniya, INN, telefon"></div>
+                        </div>
+                        <div class="input-group" style="margin:0;">
+                            <label>Rol</label>
+                            ${selectInline(f.role, [
+                                { value: "all", label: "Barcha rollar" },
+                                { value: "seller", label: "Sotuvchi" },
+                                { value: "buyer", label: "Diler" }
+                            ], "setFilter('users','role',this.value)")}
+                        </div>
+                        <div class="input-group" style="margin:0;">
+                            <label>Holat</label>
+                            ${selectInline(f.status, [
+                                { value: "all", label: "Barcha holatlar" },
+                                { value: "active", label: "Faol" },
+                                { value: "blocked", label: "Blok" }
+                            ], "setFilter('users','status',this.value)")}
+                        </div>
+                    </div>
+                    ${users.length ? userTable(users) : emptyHtml("ri-user-search-line", "Foydalanuvchi topilmadi")}
+                </div>
+            `;
+        }
+
+        function userTable(users) {
+            return `<div class="table-responsive"><table>
+                <thead><tr><th>Kompaniya</th><th>Rol</th><th>Telefon</th><th>Holat</th><th>Amal</th></tr></thead>
+                <tbody>${users.map(user => `
+                    <tr>
+                        <td><b>${escapeHtml(user.name)}</b><div class="text-xs text-muted">INN: ${escapeHtml(user.inn)}</div></td>
+                        <td><span class="badge badge-info">${roleLabel(user.role)}</span></td>
+                        <td>${escapeHtml(user.phone)}</td>
+                        <td>${statusBadge(user.status)}</td>
+                        <td><div class="flex gap-2">
+                            <button class="btn btn-outline btn-icon" onclick="openUserDetails('${user.id}')" title="Ko'rish"><i class="ri-eye-line"></i></button>
+                            <button class="btn ${user.status === "active" ? "btn-danger" : "btn-success"} btn-icon" onclick="toggleUserStatus('${user.id}')" title="Holatni o'zgartirish"><i class="${user.status === "active" ? "ri-forbid-2-line" : "ri-lock-unlock-line"}"></i></button>
+                        </div></td>
+                    </tr>`).join("")}</tbody>
+            </table></div>`;
+        }
+
+        function renderAdminOrders(container) {
+            const f = STATE.filters.orders;
+            const orders = DB.orders.filter(order => {
+                const haystack = normalize([order.id, userById(order.sellerId).name, userById(order.buyerId).name].join(" "));
+                return (!f.search || haystack.includes(normalize(f.search))) && (f.status === "all" || order.status === f.status);
+            });
+            container.innerHTML = `
+                <div class="card">
+                    <div class="section-head"><div><h3>Buyurtmalar</h3><p class="text-sm text-muted">${orders.length} ta natija</p></div></div>
+                    ${orderFilterHtml("orders")}
+                    ${orders.length ? orderTable(orders) : emptyHtml("ri-file-list-3-line", "Buyurtmalar hozircha yo'q")}
+                </div>`;
+        }
+
+        function renderAdminProducts(container) {
+            const f = STATE.filters.products;
+            const products = DB.products.filter(product => productMatches(product, f));
+            container.innerHTML = `
+                <div class="card">
+                    <div class="section-head"><div><h3>Barcha mahsulotlar</h3><p class="text-sm text-muted">${products.length} ta natija</p></div></div>
+                    ${productFilterHtml("products")}
+                    ${products.length ? productGrid(products, false) : emptyHtml("ri-store-2-line", "Mahsulotlar hozircha yo'q")}
+                </div>`;
+        }
+
+        function renderAdminComm(container) {
+            const f = STATE.filters.comm;
+            const orders = DB.orders.filter(order => {
+                const haystack = normalize([order.id, userById(order.sellerId).name, userById(order.buyerId).name].join(" "));
+                return (!f.search || haystack.includes(normalize(f.search))) && (f.status === "all" || order.commStatus === f.status);
+            });
+            container.innerHTML = `
+                <div class="card">
+                    <div class="section-head"><div><h3>Komissiya reyestri</h3><p class="text-sm text-muted">${orders.length} ta natija</p></div></div>
+                    <div class="filter-toolbar">
+                        <div class="input-group" style="margin:0;"><label>Qidirish</label><div class="search-field"><i class="ri-search-line"></i><input class="input-control" value="${escapeHtml(f.search)}" oninput="setFilter('comm','search',this.value)" placeholder="Buyurtma yoki sotuvchi"></div></div>
+                        <div class="input-group" style="margin:0;"><label>Holat</label>${selectInline(f.status, [{ value: "all", label: "Barchasi" }, { value: "pending", label: "Kutilmoqda" }, { value: "pending_admin", label: "Tasdiq kutilmoqda" }, { value: "paid", label: "To'langan" }], "setFilter('comm','status',this.value)")}</div>
+                    </div>
+                    ${orders.length ? `<div class="table-responsive"><table><thead><tr><th>Buyurtma</th><th>Sotuvchi</th><th>Komissiya</th><th>Holat</th><th>Amal</th></tr></thead><tbody>${orders.map(order => `
+                        <tr><td>#${order.id}</td><td>${escapeHtml(userById(order.sellerId).name)}</td><td class="font-bold text-primary">${money(order.comm)}</td><td>${statusBadge(order.commStatus)}</td>
+                        <td>${order.commStatus === 'pending_admin' || order.status === 'seller_paid_comm' ? `<button class="btn btn-success" style="padding:0.4rem 0.8rem; font-size:0.8rem; min-height:0;" onclick="confirmCommPayment('${order.id}')">Qabul qildim</button>` : ''}</td></tr>`).join("")}</tbody></table></div>` : emptyHtml("ri-money-dollar-circle-line", "Komissiya ma'lumotlari yo'q")}
+                </div>`;
+        }
+
+        function renderAdminReports(container) {
+            const f = STATE.filters.reports;
+            const reports = DB.reports.filter(report => {
+                const product = productById(report.prodId);
+                const order = DB.orders.find(item => item.id === report.orderId);
+                const haystack = normalize([report.id, report.orderId, product?.name, userById(order?.buyerId).name].join(" "));
+                return (!f.search || haystack.includes(normalize(f.search))) && (f.status === "all" || report.status === f.status);
+            });
+            container.innerHTML = `
+                <div class="card">
+                    <div class="section-head"><div><h3>Foto hisobotlar</h3><p class="text-sm text-muted">${reports.length} ta natija</p></div></div>
+                    ${reportFilterHtml()}
+                    ${reports.length ? reportGrid(reports, false) : emptyHtml("ri-camera-lens-line", "Foto hisobotlar hozircha yo'q")}
+                </div>`;
+        }
+
+        function renderSellerDash(container) {
+            const products = DB.products.filter(product => product.sellerId === STATE.currentUser.id);
+            const orders = DB.orders.filter(order => order.sellerId === STATE.currentUser.id);
+            container.innerHTML = `
+                <div class="grid-cards mb-6">
+                    ${statCard("ri-store-2-line", "Mahsulotlarim", `${products.length} ta`, "text-success")}
+                    ${statCard("ri-file-list-3-line", "Buyurtmalar", `${orders.length} ta`, "text-info")}
+                    ${statCard("ri-money-dollar-circle-line", "Aylanma", money(orders.reduce((sum, order) => sum + order.total, 0)), "text-primary")}
+                </div>
+                ${dashboardChartsHtml(orders)}
+                <div class="card">${orders.length ? orderTable(orders.slice(0, 5)) : emptyHtml("ri-inbox-line", "Sizda buyurtmalar yo'q")}</div>`;
+        }
+
+        function renderSellerCatalog(container) {
+            const f = STATE.filters.sellerProducts;
+            const products = DB.products.filter(product => product.sellerId === STATE.currentUser.id && productMatches(product, f));
+            container.innerHTML = `
+                <div class="section-head">
+                    <div><h2>Mening katalogim</h2><p class="text-sm text-muted">${products.length} ta mahsulot</p></div>
+                    <button class="btn btn-primary" onclick="openProductForm()"><i class="ri-add-line"></i> Yangi qo'shish</button>
+                </div>
+                <div class="card">
+                    ${productFilterHtml("sellerProducts")}
+                    ${products.length ? productGrid(products, true) : emptyHtml("ri-store-2-line", "Mos mahsulot topilmadi")}
+                </div>`;
+        }
+
+        function renderSellerOrders(container) {
+            const orders = DB.orders.filter(order => order.sellerId === STATE.currentUser.id);
+            container.innerHTML = `<div class="card"><div class="section-head"><div><h3>Sotuvlar</h3><p class="text-sm text-muted">${orders.length} ta buyurtma</p></div></div>${orders.length ? orderTable(orders) : emptyHtml("ri-shopping-bag-3-line", "Buyurtmalar yo'q")}</div>`;
+        }
+
+        function renderSellerFinance(container) {
+            const orders = DB.orders.filter(order => order.sellerId === STATE.currentUser.id);
+            container.innerHTML = `<div class="card"><div class="section-head"><div><h3>Moliya va komissiya</h3><p class="text-sm text-muted">5% platforma komissiyasi</p></div></div>
+                ${orders.length ? `<div class="table-responsive"><table><thead><tr><th>Buyurtma</th><th>Summa</th><th>Komissiya</th><th>Holat</th><th>Amal</th></tr></thead><tbody>${orders.map(order => `<tr><td>#${order.id}</td><td>${money(order.total)}</td><td class="font-bold text-primary">${money(order.comm)}</td><td>${statusBadge(order.commStatus)}</td><td>${(order.commStatus === 'pending' || !order.commStatus) ? `<button class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem; min-height:0;" title="Komissiya to'lash" onclick="openFinancePaymentModal('${order.id}')">To'lash</button>` : ''}</td></tr>`).join("")}</tbody></table></div>` : emptyHtml("ri-wallet-3-line", "Moliya ma'lumotlari yo'q")}
+            </div>`;
+        }
+
+        function renderBuyerVitrina(container) {
+            const f = STATE.filters.sellerProducts;
+            const products = DB.products.filter(product => productMatches(product, f));
+            container.innerHTML = `
+                <div class="card">
+                    <div class="section-head"><div><h3>Mahsulotlar bazasi</h3><p class="text-sm text-muted">${products.length} ta natija</p></div></div>
+                    ${productFilterHtml("sellerProducts")}
+                    ${products.length ? productGrid(products, false, true) : emptyHtml("ri-store-2-line", "Mahsulotlar hozircha yo'q")}
+                </div>`;
+        }
+
+        function renderBuyerCart(container) {
+            const items = DB.cart.filter(item => productById(item.prodId));
+            DB.cart = items;
+            saveState();
+            if (!items.length) {
+                container.innerHTML = `<div class="card">${emptyHtml("ri-shopping-cart-line", "Savatingiz bo'sh")}<div class="text-center mt-4"><button class="btn btn-primary" onclick="navigate('buyer-vitrina')">Mahsulot tanlash</button></div></div>`;
+                return;
+            }
+            const total = items.reduce((sum, item) => sum + productById(item.prodId).price * item.qty, 0);
+            container.innerHTML = `
+                <div class="card">
+                    <div class="section-head"><div><h3>Savat</h3><p class="text-sm text-muted">${items.length} turdagi mahsulot</p></div></div>
+                    <div class="table-responsive"><table><thead><tr><th>Mahsulot</th><th>Miqdor</th><th>Jami</th><th>Amal</th></tr></thead><tbody>${items.map((item, index) => {
+                        const product = productById(item.prodId);
+                        return `<tr>
+                            <td><b>${escapeHtml(product.name)}</b><div class="text-xs text-muted">${escapeHtml(userById(product.sellerId).name)}</div></td>
+                            <td><div class="flex items-center gap-2"><button class="btn btn-outline btn-icon" onclick="updateCart(${index},-1)"><i class="ri-subtract-line"></i></button><b>${item.qty}</b><button class="btn btn-outline btn-icon" onclick="updateCart(${index},1)"><i class="ri-add-line"></i></button></div></td>
+                            <td class="font-bold text-primary">${money(product.price * item.qty)}</td>
+                            <td><button class="btn btn-danger btn-icon" onclick="removeFromCart(${index})"><i class="ri-delete-bin-line"></i></button></td>
+                        </tr>`;
+                    }).join("")}</tbody></table></div>
+                    <div class="flex justify-between items-center gap-4 mt-4" style="flex-wrap:wrap;border-top:1px solid var(--border);padding-top:1rem;">
+                        <div>Jami: <span class="font-bold text-primary" style="font-size:1.25rem;">${money(total)}</span></div>
+                        <button class="btn btn-success" onclick="checkout()"><i class="ri-check-double-line"></i> Buyurtma berish</button>
+                    </div>
+                </div>`;
+        }
+
+        function renderBuyerOrders(container) {
+            const orders = DB.orders.filter(order => order.buyerId === STATE.currentUser.id);
+            container.innerHTML = `<div class="card"><div class="section-head"><div><h3>Mening buyurtmalarim</h3><p class="text-sm text-muted">${orders.length} ta buyurtma</p></div></div>${orders.length ? orderTable(orders) : emptyHtml("ri-file-list-3-line", "Buyurtmalar yo'q")}</div>`;
+        }
+
+        function renderBuyerReports(container) {
+            const reports = DB.reports.filter(report => {
+                const order = DB.orders.find(item => item.id === report.orderId);
+                return order && order.buyerId === STATE.currentUser.id;
+            });
+            container.innerHTML = `<div class="card"><div class="section-head"><div><h3>Foto hisobotlar</h3><p class="text-sm text-muted">${reports.length} ta vazifa</p></div></div>${reports.length ? reportGrid(reports, true) : emptyHtml("ri-camera-line", "Foto hisobot vazifalari yo'q")}</div>`;
+        }
+
+        function renderTickets(container) {
+            const tickets = STATE.currentUser.role === "admin" ? DB.tickets : DB.tickets.filter(ticket => ticket.userId === STATE.currentUser.id);
+            container.innerHTML = `
+                <div class="card mb-4">
+                    <div class="grid-2">
+                        <div class="input-group"><label>Mavzu</label><input id="ticket-subject" class="input-control" placeholder="Masalan: Buyurtma muammosi"></div>
+                        <div class="input-group"><label>Xabar</label><input id="ticket-message" class="input-control" placeholder="Muammo haqida yozing"></div>
+                    </div>
+                    <button class="btn btn-primary" onclick="createTicket()"><i class="ri-add-circle-line"></i> So'rov ochish</button>
+                </div>
+                <div class="grid-reports">${tickets.length ? tickets.map(ticketCard).join("") : `<div class="card">${emptyHtml("ri-question-answer-line", "Yordam so'rovlari yo'q")}</div>`}</div>`;
+        }
+
+        function emptyHtml(icon, text) {
+            return `<div class="empty-state"><i class="${icon}"></i><b>${escapeHtml(text)}</b></div>`;
+        }
+
+        function selectInline(value, options, action) {
+            return `<select class="input-control" onchange="${action}">${options.map(option => `<option value="${escapeHtml(option.value)}" ${option.value === value ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}</select>`;
+        }
+
+        function setFilter(group, key, value) {
+            STATE.filters[group][key] = value;
+            renderCurrentView();
+        }
+
+        function productMatches(product, filter) {
+            const haystack = normalize([product.name, product.sku, userById(product.sellerId).name, product.region].join(" "));
+            return (!filter.search || haystack.includes(normalize(filter.search)))
+                && (!filter.category || filter.category === "all" || product.category === filter.category)
+                && (!filter.model || filter.model === "all" || product.model === filter.model)
+                && (!filter.seller || filter.seller === "all" || product.sellerId === filter.seller);
+        }
+
+        function productFilterHtml(group) {
+            const f = STATE.filters[group];
+            const includeSeller = group === "products" && STATE.currentUser.role !== "seller";
+            return `<div class="filter-toolbar">
+                <div class="input-group" style="margin:0;"><label>Qidirish</label><div class="search-field"><i class="ri-search-line"></i><input class="input-control" value="${escapeHtml(f.search)}" oninput="setFilter('${group}','search',this.value)" placeholder="Mahsulot, SKU yoki sotuvchi"></div></div>
+                <div class="input-group" style="margin:0;"><label>Kategoriya</label>${selectInline(f.category, categoryOptions(true), `setFilter('${group}','category',this.value)`)}</div>
+                <div class="input-group" style="margin:0;"><label>Model</label>${selectInline(f.model, [{ value: "all", label: "Barcha modellar" }, { value: "realization", label: "Realizatsiya" }, { value: "prepayment", label: "Oldindan to'lov" }], `setFilter('${group}','model',this.value)`)}</div>
+                ${includeSeller ? `<div class="input-group" style="margin:0;"><label>Sotuvchi</label>${selectInline(f.seller, sellerOptions(true), `setFilter('${group}','seller',this.value)`)}</div>` : ""}
+            </div>`;
+        }
+
+        function orderFilterHtml(group) {
+            const f = STATE.filters[group];
+            return `<div class="filter-toolbar">
+                <div class="input-group" style="margin:0;"><label>Qidirish</label><div class="search-field"><i class="ri-search-line"></i><input class="input-control" value="${escapeHtml(f.search)}" oninput="setFilter('${group}','search',this.value)" placeholder="Buyurtma, sotuvchi yoki diler"></div></div>
+                <div class="input-group" style="margin:0;"><label>Holat</label>${selectInline(f.status, orderStatusOptions(true), `setFilter('${group}','status',this.value)`)}</div>
+            </div>`;
+        }
+
+        function reportFilterHtml() {
+            const f = STATE.filters.reports;
+            return `<div class="filter-toolbar">
+                <div class="input-group" style="margin:0;"><label>Qidirish</label><div class="search-field"><i class="ri-search-line"></i><input class="input-control" value="${escapeHtml(f.search)}" oninput="setFilter('reports','search',this.value)" placeholder="Buyurtma yoki mahsulot"></div></div>
+                <div class="input-group" style="margin:0;"><label>Holat</label>${selectInline(f.status, [{ value: "all", label: "Barchasi" }, { value: "pending", label: "Kutilmoqda" }, { value: "overdue", label: "Kechikkan" }, { value: "done", label: "Bajarilgan" }], "setFilter('reports','status',this.value)")}</div>
+            </div>`;
+        }
+
+        function productGrid(products, editable = false, buyerActions = false) {
+            return `<div class="grid-products">${products.map(product => {
+                const category = categoryByValue(product.category);
+                const seller = userById(product.sellerId);
+                return `<div class="product-card">
+                    <div class="product-img">${product.image ? `<img src="${imageUrl(product.image)}" alt="${escapeHtml(product.name)}">` : `<i class="${category.icon}"></i>`}</div>
+                    <div class="product-info">
+                        <div class="flex justify-between items-center gap-2"><span class="badge badge-info">${escapeHtml(category.label)}</span><span class="text-xs text-muted">${escapeHtml(product.sku)}</span></div>
+                        <div class="product-title">${escapeHtml(product.name)}</div>
+                        <div class="product-price">${money(product.price)}</div>
+                        <div class="specs">
+                            <span><i class="ri-store-2-line"></i>${escapeHtml(seller.name)}</span>
+                            <span><i class="ri-map-pin-line"></i>${escapeHtml(product.region || "Tanlanmagan")}</span>
+                            <span><i class="ri-refresh-line"></i>${product.model === "prepayment" ? `Oldindan to'lov ${product.prepayPercent || 0}%` : "Realizatsiya"}</span>
+                            <span><i class="ri-camera-line"></i>Foto hisobot: har ${product.photoDays || 15} kun</span>
+                        </div>
+                        ${editable ? `<div class="grid-2 mt-2"><button class="btn btn-outline" onclick="openProductForm('${product.id}')"><i class="ri-edit-line"></i> Tahrir</button><button class="btn btn-danger" onclick="deleteProduct('${product.id}')"><i class="ri-delete-bin-line"></i> O'chirish</button></div>` : ""}
+                        ${buyerActions ? `<button class="btn btn-primary w-full mt-2" onclick="addToCart('${product.id}')"><i class="ri-shopping-cart-2-line"></i> Savatga</button>` : ""}
+                    </div>
+                </div>`;
+            }).join("")}</div>`;
+        }
+
+        function orderTable(orders) {
+            return `<div class="table-responsive"><table>
+                <thead><tr><th>Buyurtma</th><th>Sotuvchi / Diler</th><th class="hide-sm">Sana</th><th>Summa</th><th>Holat</th><th>Amal</th></tr></thead>
+                <tbody>${orders.map(order => `<tr>
+                    <td>#${order.id}</td>
+                    <td><b>${escapeHtml(userById(order.sellerId).name)}</b><div class="text-xs text-muted">${escapeHtml(userById(order.buyerId).name)}</div></td>
+                    <td class="hide-sm">${escapeHtml(order.date)}</td>
+                    <td class="font-bold text-primary">${money(order.total)}</td>
+                    <td>${statusBadge(order.status)}</td>
+                    <td><button class="btn btn-outline btn-icon" onclick="openOrderDetails('${order.id}')"><i class="ri-eye-line"></i></button></td>
+                </tr>`).join("")}</tbody>
+            </table></div>`;
+        }
+
+        function reportGrid(reports, uploadEnabled) {
+            return `<div class="grid-reports">${reports.map(report => {
+                const product = productById(report.prodId) || { name: "O'chirilgan mahsulot", category: "other" };
+                return `<div class="report-card ${report.status}">
+                    <div class="report-thumb">${report.image ? `<img src="${imageUrl(report.image)}" alt="${escapeHtml(product.name)}">` : `<i class="${categoryByValue(product.category).icon}"></i>`}</div>
+                    <div class="flex justify-between items-center gap-2"><b>${escapeHtml(product.name)}</b>${statusBadge(report.status)}</div>
+                    <div class="details-row"><span class="details-label">Buyurtma:</span><span class="details-value">#${report.orderId}</span></div>
+                    <div class="details-row"><span class="details-label">Muddat:</span><span class="details-value">${escapeHtml(report.dueDate)}</span></div>
+                    ${report.note ? `<div class="text-sm text-muted">${escapeHtml(report.note)}</div>` : ""}
+                    ${uploadEnabled ? `<button class="btn ${report.status === "done" ? "btn-outline" : "btn-primary"}" onclick="openReportUpload('${report.id}')"><i class="ri-camera-line"></i> ${report.status === "done" ? "Yangilash" : "Yuklash"}</button>` : ""}
+                </div>`;
+            }).join("")}</div>`;
+        }
+
+        function openUserDetails(id) {
+            const user = userById(id);
+            modal("Foydalanuvchi ma'lumoti", `
+                <div class="details-list">
+                    <div class="details-row"><span class="details-label">Kompaniya:</span><span class="details-value">${escapeHtml(user.name)}</span></div>
+                    <div class="details-row"><span class="details-label">INN:</span><span class="details-value">${escapeHtml(user.inn)}</span></div>
+                    <div class="details-row"><span class="details-label">Rol:</span><span class="details-value">${roleLabel(user.role)}</span></div>
+                    <div class="details-row"><span class="details-label">Telefon:</span><span class="details-value">${escapeHtml(user.phone)}</span></div>
+                    <div class="details-row"><span class="details-label">Holat:</span><span class="details-value">${statusBadge(user.status)}</span></div>
+                </div>`,
+                `<button class="btn btn-outline" onclick="closeModal()">Yopish</button><button class="btn ${user.status === "active" ? "btn-danger" : "btn-success"}" onclick="toggleUserStatus('${id}', '${user.status === 'active' ? 'blocked' : 'active'}')">${user.status === "active" ? "Bloklash" : "Ochish"}</button>`);
+        }
+
+
+        function openProductForm(id = null) {
+            STATE.editingProductId = id;
+            const product = id ? productById(id) : null;
+            const categoryValue = product?.category || DB.categories[0]?.value || "other";
+            const region = product?.region || REGION_OPTIONS[0];
+            modal(product ? "Mahsulotni tahrirlash" : "Yangi mahsulot", `
+                <div class="grid-2">
+                    <div class="input-group"><label>SKU</label><input id="p-sku" class="input-control" value="${escapeHtml(product?.sku || "")}" placeholder="PRD-001"></div>
+                    <div class="input-group"><label>Mahsulot nomi</label><input id="p-name" class="input-control" value="${escapeHtml(product?.name || "")}" placeholder="Nom"></div>
+                </div>
+                <div class="grid-2">
+                    <div class="input-group"><label>Kategoriya</label>${selectInline(categoryValue, categoryOptions(false), "")}</div>
+                    <div class="input-group"><label>Yangi kategoriya</label><div class="flex gap-2"><input id="new-category" class="input-control" placeholder="Kategoriya qo'shish"><button class="btn btn-outline" onclick="addCategoryFromForm()">Qo'shish</button></div></div>
+                </div>
+                <div class="grid-2">
+                    <div class="input-group"><label>Narx (UZS)</label><input id="p-price" type="number" class="input-control" value="${escapeHtml(product?.price || "")}" placeholder="0"></div>
+                    <div class="input-group"><label>Viloyat</label>${selectInline(region, REGION_OPTIONS.map(item => ({ value: item, label: item })), "")}</div>
+                </div>
+                <div class="grid-2">
+                    <div class="input-group"><label>Savdo modeli</label><select id="p-model" class="input-control" onchange="togglePrepayInput()"><option value="realization" ${product?.model !== "prepayment" ? "selected" : ""}>Realizatsiya</option><option value="prepayment" ${product?.model === "prepayment" ? "selected" : ""}>Oldindan to'lov</option></select></div>
+                    <div class="input-group" id="prepay-wrap"><label>Oldindan to'lov (%)</label><input id="p-prepay" type="number" class="input-control" value="${escapeHtml(product?.prepayPercent || 30)}"></div>
+                </div>
+                <div class="grid-2">
+                    <div class="input-group"><label>Realizatsiya muddati (kun)</label><input id="p-real-days" type="number" class="input-control" value="${escapeHtml(product?.realDays || 30)}"></div>
+                    <div class="input-group"><label>Foto hisobot davri (kun)</label><input id="p-photo-days" type="number" class="input-control" value="${escapeHtml(product?.photoDays || 15)}"></div>
+                </div>
+                <div class="input-group"><label>Rasm</label><input id="p-image-file" type="file" accept="image/*" class="input-control"><input id="p-image-existing" type="hidden" value="${escapeHtml(product?.image || "")}"></div>
+            `, `<button class="btn btn-outline" onclick="closeModal()">Bekor qilish</button><button class="btn btn-primary" onclick="saveProductForm()">Saqlash</button>`);
+            const selects = document.querySelectorAll("#modal-body select");
+            selects[0].id = "p-category";
+            selects[1].id = "p-region";
+            togglePrepayInput();
+        }
+
+        function togglePrepayInput() {
+            const wrap = document.getElementById("prepay-wrap");
+            const model = document.getElementById("p-model")?.value;
+            if (wrap) wrap.classList.toggle("hidden", model !== "prepayment");
+        }
+
+        function addCategoryFromForm() {
+            const input = document.getElementById("new-category");
+            const label = input.value.trim();
+            if (!label) {
+                showToast("Kategoriya nomini yozing", "warning");
+                return;
+            }
+            const value = slugify(label);
+            let category = DB.categories.find(item => item.value === value || normalize(item.label) === normalize(label));
+            if (!category) {
+                category = { value, label, icon: "ri-price-tag-3-line" };
+                DB.categories.push(category);
+                saveState();
+            }
+            const select = document.getElementById("p-category");
+            select.innerHTML = categoryOptions(false).map(option => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("");
+            select.value = category.value;
+            input.value = "";
+            showToast("Kategoriya qo'shildi", "success");
+        }
+
+        function readFileAsDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                if (!file) {
+                    resolve("");
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function saveProductForm() {
+            const sku = document.getElementById("p-sku").value.trim();
+            const name = document.getElementById("p-name").value.trim();
+            const price = Number(document.getElementById("p-price").value);
+            const category = document.getElementById("p-category").value;
+            const region = document.getElementById("p-region").value;
+            const model = document.getElementById("p-model").value;
+            if (!sku || !name || !price || price <= 0) {
+                showToast("SKU, nom va narxni to'g'ri kiriting", "warning");
+                return;
+            }
+            
+            const file = document.getElementById("p-image-file").files[0];
+            const formData = new FormData();
+            formData.append("name", name);
+            formData.append("price", price);
+            formData.append("category", category);
+            formData.append("sku", sku);
+            formData.append("region", region);
+            formData.append("model", model);
+            
+            if (file) formData.append("image", file);
+            if (STATE.editingProductId) formData.append("id", STATE.editingProductId);
+
+            try {
+                await apiFetch('api/seller/products.php', 'POST', formData, true);
+                await refreshDB();
+                closeModal();
+                showToast("Mahsulot saqlandi", "success");
+                renderCurrentView();
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+        }
+
+        async function deleteProduct(id) {
+            if (!confirm("Mahsulot o'chirilsinmi?")) return;
+            try {
+                const formData = new FormData();
+                formData.append("action", "delete");
+                formData.append("id", id);
+                await apiFetch('api/seller/products.php', 'POST', formData, true);
+                DB.cart = DB.cart.filter(item => item.prodId !== id);
+                saveCart();
+                await refreshDB();
+                showToast("Mahsulot o'chirildi", "success");
+                renderCurrentView();
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+        }
+
+        function addToCart(productId) {
+            const product = productById(productId);
+            if (!product) return;
+            const existing = DB.cart.find(item => item.prodId === productId);
+            if (existing) existing.qty += 1;
+            else DB.cart.push({ prodId: productId, qty: 1 });
+            saveCart();
+            showToast("Mahsulot savatga qo'shildi", "success");
+            renderCurrentView();
+        }
+
+        function updateCart(index, change) {
+            const item = DB.cart[index];
+            if (!item) return;
+            item.qty += change;
+            if (item.qty <= 0) DB.cart.splice(index, 1);
+            saveCart();
+            renderBuyerCart(document.getElementById("view-area"));
+        }
+
+        function removeFromCart(index) {
+            DB.cart.splice(index, 1);
+            saveCart();
+            renderBuyerCart(document.getElementById("view-area"));
+        }
+
+        async function checkout() {
+            if (!DB.cart.length) return;
+            const grouped = DB.cart.reduce((acc, item) => {
+                const product = productById(item.prodId);
+                if (!product) return acc;
+                if (!acc[product.sellerId]) acc[product.sellerId] = [];
+                acc[product.sellerId].push(item);
+                return acc;
+            }, {});
+            
+            try {
+                for (const [sellerId, items] of Object.entries(grouped)) {
+                    const total = items.reduce((sum, item) => sum + productById(item.prodId).price * item.qty, 0);
+                    const formattedItems = items.map(item => ({
+                        prodId: item.prodId,
+                        qty: item.qty,
+                        price: productById(item.prodId).price
+                    }));
+                    
+                    await apiFetch('api/buyer/orders.php', 'POST', {
+                        action: 'create_order',
+                        sellerId,
+                        total,
+                        items: formattedItems
+                    });
+                }
+                
+                DB.cart = [];
+                saveCart();
+                await refreshDB();
+                showToast("Buyurtma sotuvchiga yuborildi", "success");
+                navigate("buyer-orders");
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+        }
+
+        function addDays(days) {
+            const date = new Date();
+            date.setDate(date.getDate() + Number(days || 0));
+            return date.toISOString().slice(0, 10);
+        }
+
+        function openOrderDetails(id) {
+            const order = DB.orders.find(item => item.id === id);
+            if (!order) return;
+            const items = order.items.map(item => {
+                const product = productById(item.prodId) || { name: "O'chirilgan mahsulot", price: 0 };
+                return `<div class="details-row"><span class="details-label">${escapeHtml(product.name)} x ${item.qty}</span><span class="details-value">${money(product.price * item.qty)}</span></div>`;
+            }).join("");
+            const actions = orderActions(order);
+            modal(`Buyurtma #${order.id}`, `
+                <div class="details-list mb-4">
+                    <div class="details-row"><span class="details-label">Sotuvchi:</span><span class="details-value">${escapeHtml(userById(order.sellerId).name)}</span></div>
+                    <div class="details-row"><span class="details-label">Diler:</span><span class="details-value">${escapeHtml(userById(order.buyerId).name)}</span></div>
+                    <div class="details-row"><span class="details-label">Sana:</span><span class="details-value">${escapeHtml(order.date)}</span></div>
+                    <div class="details-row"><span class="details-label">Holat:</span><span class="details-value">${statusBadge(order.status)}</span></div>
+                    <div class="details-row"><span class="details-label">Jami:</span><span class="details-value text-primary">${money(order.total)}</span></div>
+                </div>
+                <h4 class="mb-2">Mahsulotlar</h4>
+                <div class="details-list">${items}</div>
+            `, `<button class="btn btn-outline" onclick="closeModal()">Yopish</button>${actions}`);
+        }
+
+        function orderActions(order) {
+            if (STATE.currentUser.role === "seller" && order.sellerId === STATE.currentUser.id) {
+                if (order.status === "pending_seller_accept") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','seller_accepted')">Qabul qildim</button>`;
+                if (order.status === "seller_accepted") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','dispatched')">Yetkazishga berildi</button>`;
+                if (order.status === "dispatched") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','delivered')">Yetkazildi</button>`;
+                if (order.status === "buyer_paid") return `<button class="btn btn-success" onclick="updateOrderStatus('${order.id}','trade_closed')">To'lovni qabul qildim</button>`;
+                if (order.status === "trade_closed") {
+                    return `<button class="btn btn-primary" onclick="openPaymentModal('${order.id}', 'admin')">To'lash (Komissiya)</button>`;
+                }
+            }
+            if (STATE.currentUser.role === "buyer" && order.buyerId === STATE.currentUser.id) {
+                if (order.status === "delivered") {
+                    return `<button class="btn btn-success" onclick="updateOrderStatus('${order.id}','buyer_accepted')">Qabul qildim (Mahsulotni)</button>`;
+                }
+                if (order.status === "buyer_accepted") {
+                    return `<button class="btn btn-primary" onclick="openPaymentModal('${order.id}', 'seller')">To'lov qilish</button>`;
+                }
+            }
+            if (STATE.currentUser.role === "admin" && order.status === "seller_paid_comm") {
+                return `<button class="btn btn-success" onclick="updateOrderStatus('${order.id}','paid')">Komissiyani qabul qildim (Yakunlash)</button>`;
+            }
+            return "";
+        }
+
+        function openPaymentModal(orderId, type) {
+            const order = DB.orders.find(item => item.id === orderId);
+            if (!order) return;
+            
+            let title = "";
+            let body = "";
+            let action = "";
+            
+            if (type === "seller") {
+                const seller = userById(order.sellerId);
+                title = "To'lov cheki (Sotuvchiga)";
+                body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
+                    <div style="font-size:3.5rem;color:var(--primary);margin-bottom:1rem;"><i class="ri-secure-payment-line"></i></div>
+                    <h3 class="mb-3">Sotuvchi rekvizitlari</h3>
+                    <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
+                        <div style="margin-bottom:.5rem;">Bank hisob raqami:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(seller.bankAccount || "Kiritilmagan")}</b></div>
+                        <div>MFO:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(seller.bankMfo || "Kiritilmagan")}</b></div>
+                    </div>
+                    <div class="mt-4 mb-2">
+                        <div class="text-sm text-muted">To'lanadigan summa:</div>
+                        <div class="font-bold text-primary" style="font-size:2rem;">${money(order.total)}</div>
+                    </div>
+                    <p class="text-xs text-muted mt-4">Iltimos, to'lovni yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
+                </div>`;
+                action = `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','buyer_paid')"><i class="ri-check-double-line"></i> To'ladim</button>`;
+            } else if (type === "admin") {
+                title = "To'lov cheki (Komissiya)";
+                body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
+                    <div style="font-size:3.5rem;color:var(--info);margin-bottom:1rem;"><i class="ri-bank-card-line"></i></div>
+                    <h3 class="mb-3">Admin rekvizitlari (5% Komissiya)</h3>
+                    <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
+                        <div style="margin-bottom:.5rem;">ИНН:<br><b style="font-size:1.1rem;color:var(--text-dark);">310938488</b></div>
+                        <div style="margin-bottom:.5rem;">Х/Р:<br><b style="font-size:1.1rem;color:var(--text-dark);">20208000905719313001</b></div>
+                        <div>МФО:<br><b style="font-size:1.1rem;color:var(--text-dark);">00446</b></div>
+                    </div>
+                    <div class="mt-4 mb-2">
+                        <div class="text-sm text-muted">To'lanadigan komissiya:</div>
+                        <div class="font-bold text-primary" style="font-size:2rem;">${money(order.total * 0.05)}</div>
+                    </div>
+                    <p class="text-xs text-muted mt-4">Iltimos, komissiya to'lovini yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
+                </div>`;
+                action = `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','seller_paid_comm')"><i class="ri-check-double-line"></i> To'ladim</button>`;
+            }
+            
+            modal(title, body, `<button class="btn btn-outline" onclick="openOrderDetails('${order.id}')"><i class="ri-arrow-left-line"></i> Orqaga</button>${action}`);
+        }
+
+        async function updateOrderStatus(id, status) {
+            try {
+                const role = STATE.currentUser.role;
+                const endpoint = role === 'buyer' ? 'api/buyer/orders.php' : 'api/seller/orders.php';
+                
+                await apiFetch(endpoint, 'POST', { action: 'update_status', id, status });
+                await refreshDB();
+                closeModal();
+                showToast("Buyurtma holati yangilandi", "success");
+                renderCurrentView();
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+        }
+
+        function openFinancePaymentModal(orderId) {
+            const order = DB.orders.find(item => item.id === orderId);
+            if (!order) return;
+            
+            const title = "To'lov cheki (Komissiya)";
+            const body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
+                <div style="font-size:3.5rem;color:var(--info);margin-bottom:1rem;"><i class="ri-bank-card-line"></i></div>
+                <h3 class="mb-3">Admin rekvizitlari (5% Komissiya)</h3>
+                <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
+                    <div style="margin-bottom:.5rem;">ИНН:<br><b style="font-size:1.1rem;color:var(--text-dark);">310938488</b></div>
+                    <div style="margin-bottom:.5rem;">Х/Р:<br><b style="font-size:1.1rem;color:var(--text-dark);">20208000905719313001</b></div>
+                    <div>МФО:<br><b style="font-size:1.1rem;color:var(--text-dark);">00446</b></div>
+                </div>
+                <div class="mt-4 mb-2">
+                    <div class="text-sm text-muted">To'lanadigan komissiya:</div>
+                    <div class="font-bold text-primary" style="font-size:2rem;">${money(order.comm || order.total * 0.05)}</div>
+                </div>
+                <p class="text-xs text-muted mt-4">Iltimos, komissiya to'lovini yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
+            </div>`;
+            const action = `<button class="btn btn-primary" onclick="markCommPaidBySeller('${order.id}')"><i class="ri-check-double-line"></i> To'ladim</button>`;
+            
+            modal(title, body, `<button class="btn btn-outline" onclick="closeModal()">Orqaga</button>${action}`);
+        }
+
+        async function markCommPaidBySeller(orderId) {
+            try {
+                await apiFetch('api/seller/orders.php', 'POST', { action: 'update_status', id: orderId, status: 'seller_paid_comm' });
+                await refreshDB();
+                closeModal();
+                showToast("To'lov qabul qilindi, adminga yuborildi", "success");
+                renderCurrentView();
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+        }
+
+        async function confirmCommPayment(orderId) {
+            try {
+                await apiFetch('api/admin/commissions.php', 'POST', { action: 'confirm_comm', id: orderId });
+                await refreshDB();
+                showToast("Komissiya to'lovi tasdiqlandi", "success");
+                renderCurrentView();
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+        }
+
+        async function toggleUserStatus(userId, status) {
+            try {
+                await apiFetch('api/admin/users.php', 'POST', { action: 'toggle_status', id: userId, status });
+                await refreshDB();
+                closeModal();
+                showToast("Foydalanuvchi holati o'zgartirildi", "success");
+                renderCurrentView();
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+        }
+
+        function openReportUpload(id) {
+            const report = DB.reports.find(item => item.id === id);
+            if (!report) return;
+            const product = productById(report.prodId) || { name: "Mahsulot" };
+            modal("Foto hisobot yuklash", `
+                <div class="report-thumb mb-4">${report.image ? `<img src="${imageUrl(report.image)}" alt="${escapeHtml(product.name)}">` : `<i class="ri-camera-line"></i>`}</div>
+                <div class="input-group"><label>Mahsulot</label><input class="input-control" value="${escapeHtml(product.name)}" disabled></div>
+                <div class="input-group"><label>Foto</label><input id="report-file" type="file" accept="image/*" class="input-control"></div>
+                <div class="input-group"><label>Izoh</label><textarea id="report-note" class="input-control" rows="3" placeholder="Masalan: mahsulot vitrinada joylandi">${escapeHtml(report.note || "")}</textarea></div>
+            `, `<button class="btn btn-outline" onclick="closeModal()">Bekor qilish</button><button class="btn btn-primary" onclick="saveReportUpload('${id}')">Yuborish</button>`);
+        }
+
+        async function saveReportUpload(id) {
+            const report = DB.reports.find(item => item.id === id);
+            if (!report) return;
+            const file = document.getElementById("report-file").files[0];
+            const note = document.getElementById("report-note").value.trim();
+            
+            if (!file && !report.image) {
+                showToast("Foto tanlang", "warning");
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append("id", id);
+                formData.append("note", note);
+                if (file) formData.append("file", file);
+
+                await apiFetch('api/seller/reports.php', 'POST', formData, true);
+                await refreshDB();
+                closeModal();
+                showToast("Foto hisobot yuborildi", "success");
+                renderCurrentView();
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
+        }
+
+        async function createTicket() {
+            const subject = document.getElementById("ticket-subject").value.trim();
+            const message = document.getElementById("ticket-message").value.trim();
+            if (!subject || !message) {
+                showToast("Mavzu va xabarni kiriting", "warning");
+                return;
+            }
+            try {
+                await apiFetch('api/tickets.php', 'POST', { action: 'create', subject, message });
+                await refreshDB();
+                showToast("So'rov ochildi", "success");
+                renderCurrentView();
+            } catch(e) {
+                showToast(e.message, "danger");
+            }
+        }
+
+        function ticketCard(ticket) {
+            return `<div class="report-card">
+                <div class="flex justify-between items-center gap-2"><b>${escapeHtml(ticket.subject)}</b>${statusBadge(ticket.status)}</div>
+                <div class="text-sm text-muted">${escapeHtml(userById(ticket.userId).name)}</div>
+                <p>${escapeHtml(ticket.message)}</p>
+                <div class="flex gap-2"><input class="input-control" id="reply-${ticket.id}" placeholder="Javob yozish"><button class="btn btn-primary" onclick="replyTicket('${ticket.id}')">Javob</button></div>
+                ${(ticket.replies || []).map(reply => `<div class="card" style="box-shadow:none;background:#f8fafc;padding:.75rem;"><b>${escapeHtml(reply.author)}</b><div class="text-sm text-muted">${escapeHtml(reply.text)}</div></div>`).join("")}
+            </div>`;
+        }
+
+        async function replyTicket(id) {
+            const ticket = DB.tickets.find(item => item.id === id);
+            const input = document.getElementById(`reply-${id}`);
+            const text = input?.value.trim();
+            if (!ticket || !text) {
+                showToast("Javob matnini yozing", "warning");
+                return;
+            }
+            try {
+                await apiFetch('api/tickets.php', 'POST', { action: 'reply', ticket_id: id, message: text });
+                await refreshDB();
+                showToast("Javob qo'shildi", "success");
+                renderCurrentView();
+            } catch(e) {
+                showToast(e.message, "danger");
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            document.querySelectorAll("#login-phone,#reg-phone").forEach(input => input.addEventListener("input", () => formatPhoneInput(input)));
+            const loginTerms = document.getElementById("login-terms");
+            const registerTerms = document.getElementById("register-terms");
+            if (loginTerms) loginTerms.addEventListener("change", event => document.getElementById("login-btn").disabled = !event.target.checked);
+            if (registerTerms) registerTerms.addEventListener("change", event => document.getElementById("register-btn").disabled = !event.target.checked);
+            document.addEventListener("click", event => {
+                if (!event.target.closest(".topbar-left")) toggleMobileMenu(false);
+            });
+            initApp();
+        });

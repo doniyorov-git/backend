@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="uz">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Diller UZ - Kirish</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+
+<body data-page="auth" data-root=".">
+    <section id="auth-layout">
+        <div class="card auth-card">
+            <div class="auth-brand"><i class="ri-store-2-line"></i></div>
+
+            <div id="login-form">
+                <div class="text-center mb-6">
+                    <h2 class="mb-2">Xush kelibsiz</h2>
+                    <p class="text-muted text-sm">Telefon va parol bilan tizimga kiring</p>
+                </div>
+                <div class="input-group">
+                    <label>Telefon raqam</label>
+                    <div class="phone-field">
+                        <span class="phone-prefix">+998</span>
+                        <input type="tel" id="login-phone" placeholder="90 123 45 67" maxlength="12">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Parol</label>
+                    <input type="password" id="login-password" class="input-control" placeholder="Parol">
+                </div>
+                <div class="terms-row">
+                    <input type="checkbox" id="login-terms">
+                    <label for="login-terms" class="text-xs text-muted">Xizmat shartlari va maxfiylik siyosatiga
+                        roziman</label>
+                </div>
+                <button class="btn btn-primary w-full" id="login-btn" disabled onclick="doLogin()">Kirish</button>
+                <div class="mt-4 card" style="box-shadow:none;background:#f8fafc;border-color:#dbeafe;">
+                    <div class="text-sm font-bold mb-1">Demo kirish</div>
+                    <div class="text-xs text-muted">Admin uchun parol: <b>admin</b>. Sotuvchi va dilerlar ro'yxatdan
+                        o'tgandan keyin telefon/parol bilan kiradi.</div>
+                </div>
+                <div class="auth-switch">
+                    Hisobingiz yo'qmi?
+                    <button type="button" onclick="switchAuth('register')">Ro'yxatdan o'tish</button>
+                </div>
+            </div>
+
+            <div id="register-form" class="hidden">
+                <div class="text-center mb-6">
+                    <h2 class="mb-2">Ro'yxatdan o'tish</h2>
+                    <p class="text-muted text-sm" id="reg-step-desc">Kompaniya ma'lumotlari</p>
+                </div>
+
+                <div class="step-indicator"
+                    style="display:flex; justify-content:space-between; position:relative; margin-bottom: 2rem; padding: 0 1rem;">
+                    <div
+                        style="position:absolute; top:50%; left:2rem; right:2rem; height:2px; background:var(--border); z-index:1; transform:translateY(-50%);">
+                    </div>
+                    <div id="step-dot-1"
+                        style="width:32px; height:32px; border-radius:50%; background:var(--primary); color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; position:relative; z-index:2; border:2px solid var(--primary);">
+                        1</div>
+                    <div id="step-dot-2"
+                        style="width:32px; height:32px; border-radius:50%; background:white; color:var(--muted); display:flex; align-items:center; justify-content:center; font-weight:bold; position:relative; z-index:2; border:2px solid var(--border);">
+                        2</div>
+                    <div id="step-dot-3"
+                        style="width:32px; height:32px; border-radius:50%; background:white; color:var(--muted); display:flex; align-items:center; justify-content:center; font-weight:bold; position:relative; z-index:2; border:2px solid var(--border);">
+                        3</div>
+                </div>
+
+                <div id="reg-step-1">
+                    <div class="input-group">
+                        <label>Rol</label>
+                        <select id="reg-role" class="input-control">
+                            <option value="seller">Sotuvchi</option>
+                            <option value="buyer">Diler</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Kompaniya nomi</label>
+                        <input id="reg-name" class="input-control" placeholder="MChJ / YATT nomi">
+                    </div>
+                    <div class="input-group">
+                        <label>INN (STIR)</label>
+                        <input id="reg-inn" class="input-control" inputmode="numeric" placeholder="9 xonali raqam"
+                            maxlength="9">
+                    </div>
+                    <button type="button" class="btn btn-primary w-full mt-4" onclick="nextRegStep(2)">Keyingi <i
+                            class="ri-arrow-right-line"></i></button>
+                </div>
+
+                <div id="reg-step-2" class="hidden">
+                    <div class="input-group">
+                        <label>Bank hisob raqami</label>
+                        <input id="reg-bank-acc" class="input-control" inputmode="numeric" placeholder="20 xonali raqam"
+                            maxlength="20">
+                    </div>
+                    <div class="input-group">
+                        <label>Bank MFO</label>
+                        <input id="reg-bank-mfo" class="input-control" inputmode="numeric" placeholder="5 xonali raqam"
+                            maxlength="5">
+                    </div>
+                    <div class="grid-2 mt-4">
+                        <button type="button" class="btn btn-outline" onclick="nextRegStep(1)"><i
+                                class="ri-arrow-left-line"></i> Orqaga</button>
+                        <button type="button" class="btn btn-primary" onclick="nextRegStep(3)">Keyingi <i
+                                class="ri-arrow-right-line"></i></button>
+                    </div>
+                </div>
+
+                <div id="reg-step-3" class="hidden">
+                    <div class="input-group">
+                        <label>Telefon raqam</label>
+                        <div class="phone-field">
+                            <span class="phone-prefix">+998</span>
+                            <input type="tel" id="reg-phone" placeholder="90 123 45 67" maxlength="12"
+                                oninput="formatPhoneInput(this)">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label>Parol</label>
+                        <input type="password" id="reg-password" class="input-control" placeholder="Kamida 4 belgi">
+                    </div>
+                    <div class="terms-row">
+                        <input type="checkbox" id="register-terms" disabled
+                            onchange="document.getElementById('register-btn').disabled = !this.checked">
+                        <label class="text-xs text-muted" style="cursor:pointer;" onclick="openContractModal(event)">
+                            <span style="color:var(--primary); text-decoration:underline;">Hamkorlik va xizmat
+                                ko'rsatish shartnomasi</span> bilan tanishdim va roziman
+                        </label>
+                    </div>
+                    <div class="grid-2 mt-4">
+                        <button type="button" class="btn btn-outline" onclick="nextRegStep(2)"><i
+                                class="ri-arrow-left-line"></i> Orqaga</button>
+                        <button class="btn btn-primary" id="register-btn" disabled
+                            onclick="doRegister()">Yakunlash</button>
+                    </div>
+                </div>
+
+                <div class="auth-switch mt-4">
+                    Hisobingiz bormi?
+                    <button type="button" onclick="switchAuth('login')">Kirish</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div id="main-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"
+                style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:1rem; margin-bottom:1rem;">
+                <h3 id="modal-title"></h3>
+                <button class="btn btn-icon btn-outline" onclick="closeModal()"
+                    style="border:none;background:transparent;"><i class="ri-close-line"></i></button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+            <div class="modal-footer" id="modal-footer"
+                style="display:flex; justify-content:flex-end; gap:1rem; border-top:1px solid var(--border); padding-top:1rem; margin-top:1rem;">
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="assets/js/app.js?v=10"></script>
+</body>
+
+</html>
