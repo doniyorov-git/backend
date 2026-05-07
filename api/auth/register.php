@@ -37,6 +37,8 @@ try {
         'phone' => $phone,
         'role' => $role,
         'inn' => $inn,
+        'bank_account' => $bank_account,
+        'mfo' => $mfo,
         'status' => 'active'
     ];
     

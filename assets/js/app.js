@@ -215,6 +215,22 @@ const STORAGE_KEY = "myDillerUzStateV2";
         const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
         const phoneDigits = value => String(value || "").replace(/\D/g, "").slice(0, 9);
         const fullPhone = value => "+998" + phoneDigits(value);
+        function accountDigits(value) {
+            return String(value || "").replace(/\D/g, "").slice(0, 20);
+        }
+
+        function mfoDigits(value) {
+            return String(value || "").replace(/\D/g, "").slice(0, 5);
+        }
+
+        function normalizeSessionUser(user) {
+            if (!user) return user;
+            return {
+                ...user,
+                bankAccount: user.bankAccount ?? user.bank_account ?? "",
+                bankMfo: user.bankMfo ?? user.mfo ?? ""
+            };
+        }
 
         function formatDateTime(value) {
             const raw = String(value || "").trim();
@@ -463,10 +479,10 @@ Imzo: __
                 
                 const res = await apiFetch('api/auth/login.php', 'POST', { phone, password });
                 if (res.success) {
-                    STATE.currentUser = res.user;
-                    localStorage.setItem(SESSION_KEY, JSON.stringify(res.user));
+                    STATE.currentUser = normalizeSessionUser(res.user);
+                    localStorage.setItem(SESSION_KEY, JSON.stringify(STATE.currentUser));
                     showToast("Tizimga kirdingiz", "success");
-                    setTimeout(() => window.location.href = dashboardUrl(res.user.role), 300);
+                    setTimeout(() => window.location.href = dashboardUrl(STATE.currentUser.role), 300);
                 }
             } catch (e) {
                 showToast(e.message, "danger");
@@ -511,10 +527,10 @@ Imzo: __
                 });
                 
                 if (res.success) {
-                    STATE.currentUser = res.user;
-                    localStorage.setItem(SESSION_KEY, JSON.stringify(res.user));
+                    STATE.currentUser = normalizeSessionUser(res.user);
+                    localStorage.setItem(SESSION_KEY, JSON.stringify(STATE.currentUser));
                     showToast("Muvaffaqiyatli ro'yxatdan o'tdingiz", "success");
-                    setTimeout(() => window.location.href = dashboardUrl(res.user.role), 300);
+                    setTimeout(() => window.location.href = dashboardUrl(STATE.currentUser.role), 300);
                 }
             } catch(e) {
                 showToast(e.message, "danger");
@@ -535,8 +551,142 @@ Imzo: __
             window.location.href = authUrl();
         }
 
+        function renderProfileMenu() {
+            const dropdown = document.getElementById("profile-dropdown");
+            if (!dropdown || !STATE.currentUser) return;
+
+            const user = normalizeSessionUser(STATE.currentUser);
+            const bankAccount = user.bankAccount || "";
+            const bankMfo = user.bankMfo || "";
+            dropdown.innerHTML = `
+                <div class="profile-head">
+                    <div class="profile-head-avatar">${escapeHtml((user.name || "U").charAt(0).toUpperCase())}</div>
+                    <div>
+                        <b>${escapeHtml(user.name || "Foydalanuvchi")}</b>
+                        <div class="text-xs text-muted">${escapeHtml(roleLabel(user.role))} · ${escapeHtml(user.phone || "")}</div>
+                    </div>
+                </div>
+                <button class="profile-menu-item" onclick="toggleProfileSection('profile-password-section')">
+                    <i class="ri-lock-password-line"></i>
+                    <span>Parolni almashtirish</span>
+                    <i class="ri-arrow-down-s-line"></i>
+                </button>
+                <div class="profile-form hidden" id="profile-password-section">
+                    <div class="input-group">
+                        <label>Yangi parol</label>
+                        <input id="profile-new-password" type="password" class="input-control" placeholder="Kamida 4 belgi">
+                    </div>
+                    <div class="input-group">
+                        <label>Parolni takrorlang</label>
+                        <input id="profile-confirm-password" type="password" class="input-control" placeholder="Qayta kiriting">
+                    </div>
+                    <button class="btn btn-primary w-full" id="profile-password-btn" onclick="updateProfilePassword()">Saqlash</button>
+                </div>
+                <button class="profile-menu-item" onclick="toggleProfileSection('profile-bank-section')">
+                    <i class="ri-bank-card-line"></i>
+                    <span>Bank hisob raqamini almashtirish</span>
+                    <i class="ri-arrow-down-s-line"></i>
+                </button>
+                <div class="profile-form hidden" id="profile-bank-section">
+                    <div class="input-group">
+                        <label>Bank hisob raqami</label>
+                        <input id="profile-bank-account" class="input-control" inputmode="numeric" maxlength="20" value="${escapeHtml(bankAccount)}" placeholder="20 xonali raqam" oninput="this.value=accountDigits(this.value)">
+                    </div>
+                    <div class="input-group">
+                        <label>Bank MFO</label>
+                        <input id="profile-bank-mfo" class="input-control" inputmode="numeric" maxlength="5" value="${escapeHtml(bankMfo)}" placeholder="5 xonali raqam" oninput="this.value=mfoDigits(this.value)">
+                    </div>
+                    <button class="btn btn-primary w-full" id="profile-bank-btn" onclick="updateProfileBank()">Saqlash</button>
+                </div>
+                <button class="profile-menu-item profile-logout" onclick="doLogout()">
+                    <i class="ri-logout-box-r-line"></i>
+                    <span>Chiqish</span>
+                </button>
+            `;
+        }
+
+        function toggleProfileMenu(event) {
+            event?.stopPropagation();
+            toggleMobileMenu(false);
+            document.getElementById("notification-dropdown")?.classList.remove("open");
+            renderProfileMenu();
+            document.getElementById("profile-dropdown")?.classList.toggle("open");
+        }
+
+        function toggleProfileSection(id) {
+            const section = document.getElementById(id);
+            if (!section) return;
+            section.classList.toggle("hidden");
+        }
+
+        async function updateProfilePassword() {
+            const password = document.getElementById("profile-new-password")?.value.trim() || "";
+            const confirm = document.getElementById("profile-confirm-password")?.value.trim() || "";
+            if (password.length < 4) {
+                showToast("Parol kamida 4 belgidan iborat bo'lishi kerak", "warning");
+                return;
+            }
+            if (password !== confirm) {
+                showToast("Parollar bir xil emas", "warning");
+                return;
+            }
+
+            const btn = document.getElementById("profile-password-btn");
+            try {
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Saqlanmoqda...`;
+                }
+                const res = await apiFetch('api/auth/profile.php', 'POST', { action: 'update_password', password });
+                STATE.currentUser = normalizeSessionUser(res.user);
+                localStorage.setItem(SESSION_KEY, JSON.stringify(STATE.currentUser));
+                renderProfileMenu();
+                showToast("Parol yangilandi", "success");
+            } catch (e) {
+                showToast(e.message, "danger");
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = "Saqlash";
+                }
+            }
+        }
+
+        async function updateProfileBank() {
+            const bankAccount = accountDigits(document.getElementById("profile-bank-account")?.value || "");
+            const bankMfo = mfoDigits(document.getElementById("profile-bank-mfo")?.value || "");
+            if (bankAccount.length !== 20 || bankMfo.length !== 5) {
+                showToast("Hisob raqam 20 ta, MFO 5 ta raqam bo'lishi kerak", "warning");
+                return;
+            }
+
+            const btn = document.getElementById("profile-bank-btn");
+            try {
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = `<i class="ri-loader-4-line ri-spin"></i> Saqlanmoqda...`;
+                }
+                const res = await apiFetch('api/auth/profile.php', 'POST', {
+                    action: 'update_bank',
+                    bank_account: bankAccount,
+                    mfo: bankMfo
+                });
+                STATE.currentUser = normalizeSessionUser(res.user);
+                localStorage.setItem(SESSION_KEY, JSON.stringify(STATE.currentUser));
+                renderProfileMenu();
+                showToast("Bank rekvizitlari yangilandi", "success");
+            } catch (e) {
+                showToast(e.message, "danger");
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = "Saqlash";
+                }
+            }
+        }
+
         async function initApp() {
-            STATE.currentUser = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+            STATE.currentUser = normalizeSessionUser(JSON.parse(localStorage.getItem(SESSION_KEY) || "null"));
             
             if (PAGE_TYPE === "auth") {
                 document.getElementById("auth-layout")?.classList.remove("hidden");
@@ -560,6 +710,7 @@ Imzo: __
                 if (roleEl) roleEl.textContent = roleLabel(STATE.currentUser.role);
                 const avatarEl = document.getElementById("topbar-avatar");
                 if (avatarEl && STATE.currentUser.name) avatarEl.textContent = STATE.currentUser.name.charAt(0).toUpperCase();
+                renderProfileMenu();
                 
                 renderMenus();
                 
@@ -1171,7 +1322,7 @@ Imzo: __
                     </div>
                     <button class="btn btn-primary" onclick="createTicket()"><i class="ri-add-circle-line"></i> So'rov ochish</button>
                 </div>
-                <div class="grid-reports">${tickets.length ? tickets.map(ticketCard).join("") : `<div class="card">${emptyHtml("ri-question-answer-line", "Yordam so'rovlari yo'q")}</div>`}</div>`;
+                <div class="ticket-grid">${tickets.length ? tickets.map(ticketCard).join("") : `<div class="card">${emptyHtml("ri-question-answer-line", "Yordam so'rovlari yo'q")}</div>`}</div>`;
         }
 
         function emptyHtml(icon, text) {
@@ -1741,20 +1892,29 @@ Imzo: __
 
         function ticketCard(ticket) {
             const createdAt = formatDateTime(ticket.createdAt);
-            return `<div class="report-card">
-                <div class="flex justify-between items-center gap-2"><b>${escapeHtml(ticket.subject)}</b>${statusBadge(ticket.status)}</div>
-                <div class="text-sm text-muted">${escapeHtml(userById(ticket.userId).name)}</div>
-                <div class="text-xs text-muted"><i class="ri-time-line"></i> Ochilgan: ${escapeHtml(createdAt || "Sana ko'rsatilmagan")}</div>
-                <p>${escapeHtml(ticket.message)}</p>
-                <div class="flex gap-2"><input class="input-control" id="reply-${ticket.id}" placeholder="Javob yozish"><button class="btn btn-primary" onclick="replyTicket('${ticket.id}')">Javob</button></div>
-                ${(ticket.replies || []).map(reply => {
+            const author = userById(ticket.userId);
+            return `<article class="ticket-card">
+                <div class="ticket-title-row">
+                    <b class="ticket-subject">${escapeHtml(ticket.subject)}</b>
+                    ${statusBadge(ticket.status)}
+                </div>
+                <div class="ticket-meta">
+                    <span class="ticket-user-chip"><i class="ri-user-3-line"></i><span>${escapeHtml(author.name)}</span></span>
+                    <span><i class="ri-time-line"></i> Ochilgan: ${escapeHtml(createdAt || "Sana ko'rsatilmagan")}</span>
+                </div>
+                <p class="ticket-message">${escapeHtml(ticket.message)}</p>
+                <div class="ticket-reply-box">
+                    <input class="input-control" id="reply-${ticket.id}" placeholder="Javob yozish">
+                    <button class="btn btn-primary" onclick="replyTicket('${ticket.id}')">Javob</button>
+                </div>
+                <div class="ticket-replies">${(ticket.replies || []).map(reply => {
                     const replyCreatedAt = formatDateTime(reply.createdAt);
-                    return `<div class="card" style="box-shadow:none;background:#f8fafc;padding:.75rem;">
-                        <div class="flex justify-between items-center gap-2"><b>${escapeHtml(reply.author)}</b><span class="text-xs text-muted">${escapeHtml(replyCreatedAt)}</span></div>
+                    return `<div class="ticket-reply">
+                        <div class="ticket-title-row"><b>${escapeHtml(reply.author)}</b><span class="text-xs text-muted">${escapeHtml(replyCreatedAt)}</span></div>
                         <div class="text-sm text-muted">${escapeHtml(reply.text)}</div>
                     </div>`;
-                }).join("")}
-            </div>`;
+                }).join("")}</div>
+            </article>`;
         }
 
         async function replyTicket(id) {
@@ -1784,6 +1944,7 @@ Imzo: __
             document.addEventListener("click", event => {
                 if (!event.target.closest(".topbar-left")) toggleMobileMenu(false);
                 if (!event.target.closest(".notification-wrapper")) document.getElementById("notification-dropdown")?.classList.remove("open");
+                if (!event.target.closest(".profile-wrapper")) document.getElementById("profile-dropdown")?.classList.remove("open");
             });
             initApp();
         });

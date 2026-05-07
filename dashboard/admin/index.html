@@ -7,7 +7,7 @@
     <title>My Diller UZ - Admin Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
-    <link rel="stylesheet" href="../../assets/css/styles.css?v=12">
+    <link rel="stylesheet" href="../../assets/css/styles.css?v=13">
 </head>
 
 <body data-page="dashboard" data-role="admin" data-root="../..">
@@ -35,12 +35,17 @@
                         </button>
                         <div class="notification-dropdown" id="notification-dropdown"></div>
                     </div>
-                    <div class="hide-sm text-right">
-                        <div id="topbar-user-name" class="font-bold">Foydalanuvchi</div>
-                        <div id="topbar-user-role" class="text-xs text-muted">Rol</div>
+                    <div class="profile-wrapper">
+                        <button class="profile-toggle" onclick="toggleProfileMenu(event)" title="Profil">
+                            <span class="hide-sm text-right">
+                                <span id="topbar-user-name" class="font-bold">Foydalanuvchi</span>
+                                <span id="topbar-user-role" class="text-xs text-muted">Rol</span>
+                            </span>
+                            <span class="avatar" id="topbar-avatar">U</span>
+                            <i class="ri-arrow-down-s-line profile-caret"></i>
+                        </button>
+                        <div class="profile-dropdown" id="profile-dropdown"></div>
                     </div>
-                    <div class="avatar" id="topbar-avatar">U</div>
-                    <button class="btn btn-outline" onclick="doLogout()"><i class="ri-logout-box-r-line"></i> Chiqish</button>
                 </div>
             </header>
             <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Asosiy menyu"></nav>
@@ -61,7 +66,7 @@
 
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="../../assets/js/app.js?v=13"></script>
+    <script src="../../assets/js/app.js?v=14"></script>
 </body>
 
 </html>
