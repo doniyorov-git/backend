@@ -161,7 +161,7 @@ function appFetchProduct(PDO $pdo, $productId) {
         return null;
     }
 
-    $stmt = $pdo->prepare("SELECT id, name, sku, category, price, unit, region, model FROM products WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, name, sku, category, price, unit, region, model, prepay_percent, real_days, photo_days FROM products WHERE id = ?");
     $stmt->execute([$productId]);
     return $stmt->fetch() ?: null;
 }
@@ -180,8 +180,15 @@ function appSellerListingContractHtml(PDO $pdo, $sellerId, $context = []) {
     $platform = appPlatformParty($pdo);
     $seller = appFetchUserParty($pdo, $sellerId);
     $product = appFetchProduct($pdo, $context['product_id'] ?? null);
+    $productTradeTerms = '';
+    if ($product) {
+        $productTradeTerms = $product['model'] === 'prepayment'
+            ? ', oldindan to\'lov: ' . appEscape($product['prepay_percent'] ?? 0) . '%'
+            : ', savdo modeli: realizatsiya';
+        $productTradeTerms .= ', realizatsiya muddati: ' . appEscape($product['real_days'] ?? 30) . ' kun';
+    }
     $productLine = $product
-        ? '<p><b>Mahsulot:</b> ' . appEscape($product['name']) . ' (' . appEscape($product['sku'] ?? '') . '), narx: ' . appEscape($product['price']) . ' UZS, hudud: ' . appEscape($product['region'] ?? '') . '.</p>'
+        ? '<p><b>Mahsulot:</b> ' . appEscape($product['name']) . ' (' . appEscape($product['sku'] ?? '') . '), narx: ' . appEscape($product['price']) . ' UZS, hudud: ' . appEscape($product['region'] ?? '') . $productTradeTerms . '.</p>'
         : '';
 
     $content = '
@@ -424,6 +431,9 @@ function ensureAppSchema(PDO $pdo) {
     }
 
     $columns = [
+        'prepay_percent' => "ALTER TABLE products ADD COLUMN prepay_percent DECIMAL(5,2) NULL AFTER model",
+        'real_days' => "ALTER TABLE products ADD COLUMN real_days INT DEFAULT 30 AFTER prepay_percent",
+        'photo_days' => "ALTER TABLE products ADD COLUMN photo_days INT DEFAULT 15 AFTER real_days",
         'moderation_note' => "ALTER TABLE products ADD COLUMN moderation_note TEXT NULL AFTER status",
         'moderated_by' => "ALTER TABLE products ADD COLUMN moderated_by VARCHAR(50) NULL AFTER moderation_note",
         'moderated_at' => "ALTER TABLE products ADD COLUMN moderated_at DATETIME NULL AFTER moderated_by"
