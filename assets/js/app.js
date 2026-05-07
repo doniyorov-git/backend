@@ -302,7 +302,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             const explicitNumber = String(contract?.contractNumber || contract?.contract_number || "").trim();
             if (explicitNumber) return explicitNumber;
             const signedAtDigits = String(contract?.signedAt || contract?.created_at || "").replace(/\D/g, "");
-            if (signedAtDigits.length >= 14) return signedAtDigits.slice(0, 14);
+            if (signedAtDigits.length >= 12) return signedAtDigits.slice(2, 12);
             const rawId = String(contract?.id || "").replace(/^ctr_?/i, "").replace(/[^\w-]/g, "").toUpperCase();
             return rawId || "Aniqlanmagan";
         }

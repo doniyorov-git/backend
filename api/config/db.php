@@ -95,7 +95,7 @@ function appValue($value, $fallback = 'Kiritilmagan') {
 }
 
 function appGenerateContractNumber() {
-    return date('YmdHis') . sprintf('%02d', random_int(10, 99));
+    return date('ymdHi') . sprintf('%03d', random_int(0, 999));
 }
 
 function appFormatContractDate($value) {
@@ -454,8 +454,8 @@ function ensureAppSchema(PDO $pdo) {
         $pdo->exec("
             UPDATE contract_signatures
             SET contract_number = CONCAT(
-                DATE_FORMAT(COALESCE(signed_at, created_at), '%Y%m%d%H%i%s'),
-                LPAD(MOD(CRC32(id), 100), 2, '0')
+                DATE_FORMAT(COALESCE(signed_at, created_at), '%y%m%d%H%i'),
+                LPAD(MOD(CRC32(id), 1000), 3, '0')
             )
             WHERE contract_number IS NULL OR contract_number = ''
         ");
