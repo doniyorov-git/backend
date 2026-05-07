@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS contract_signatures (
     id VARCHAR(50) PRIMARY KEY,
     contract_type ENUM('platform_terms', 'seller_listing', 'buyer_order') NOT NULL,
     title VARCHAR(255) NOT NULL,
+    contract_number VARCHAR(20),
     signer_id VARCHAR(50) NOT NULL,
     counterparty_id VARCHAR(50),
     product_id VARCHAR(50),

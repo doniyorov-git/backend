@@ -177,6 +177,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 const mapContract = c => ({
                     ...c,
                     contractType: c.contract_type,
+                    contractNumber: c.contract_number,
                     signerId: c.signer_id,
                     signerName: c.signer_name,
                     signerRole: c.signer_role,
@@ -286,6 +287,51 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 return `${day}.${month}.${year} ${hour}:${minute}`;
             }
             return raw;
+        }
+
+        function formatContractDateText(value) {
+            const raw = String(value || "").trim();
+            const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (!match) return "Shartnoma sanasi ko'rsatilmagan";
+            const [, year, month, day] = match;
+            const monthNames = {
+                "01": "yanvar",
+                "02": "fevral",
+                "03": "mart",
+                "04": "aprel",
+                "05": "may",
+                "06": "iyun",
+                "07": "iyul",
+                "08": "avgust",
+                "09": "sentyabr",
+                "10": "oktyabr",
+                "11": "noyabr",
+                "12": "dekabr"
+            };
+            return `${year}-yil ${day}-${monthNames[month] || month}dagi`;
+        }
+
+        function formatEntityPaymentName(name) {
+            const cleanName = String(name || "").trim();
+            if (!cleanName) return '"YATT nomi" XK';
+            if (/\b(MCHJ|OOO|LLC|XK|X\/K|YATT)\b/i.test(cleanName)) {
+                return `"${cleanName}"`;
+            }
+            return `"${cleanName}" XK`;
+        }
+
+        function findBuyerOrderContract(orderId) {
+            return DB.contracts.find(contract => contract.contractType === "buyer_order" && contract.orderId === orderId);
+        }
+
+        function findSellerPlatformContract(sellerId) {
+            return DB.contracts.find(contract => contract.contractType === "seller_listing" && contract.signerId === sellerId);
+        }
+
+        function buildPaymentPurpose({ contract, companyName, description }) {
+            const contractDateText = formatContractDateText(contract?.signedAt || contract?.created_at || "");
+            const contractNumber = contract?.contractNumber || "______";
+            return `${formatEntityPaymentName(companyName)}, ${contractDateText} ${contractNumber}-sonli shartnomaga asosan ${description}.`;
         }
 
         function formatPhoneInput(input) {
@@ -466,9 +512,14 @@ const STORAGE_KEY = "myDillerUzStateV2";
             };
         }
 
+        function contractPreviewMetaHtml() {
+            return `<p><b>Shartnoma rekviziti:</b> raqam imzolangan paytda avtomatik beriladi.</p>`;
+        }
+
         function platformContractHtml(source = "register") {
             const user = currentUserParty();
             return `<div class="contract-document">
+                ${contractPreviewMetaHtml()}
                 <h3>PLATFORMA OFERTASI VA XIZMAT KO'RSATISH SHARTNOMASI</h3>
                 <p>Ushbu shartnoma RoboTexnika MCHJ va foydalanuvchi o'rtasida elektron tarzda tuziladi.</p>
                 <h4>1. TOMONLAR</h4>
@@ -494,6 +545,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 ? `${product.model === "prepayment" ? `, oldindan to'lov: ${formatPercent(product.prepayPercent)}%` : ", savdo modeli: realizatsiya"}, realizatsiya muddati: ${parseNumberOrDefault(product.realDays, 30)} kun`
                 : "";
             return `<div class="contract-document">
+                ${contractPreviewMetaHtml()}
                 <h4>1. SHARTNOMA TOMONLARI</h4>
                 <p>1.1. "RoboTexnika" MCHJ, keyingi o'rinlarda "Platforma" deb yuritiladi, direktor Mirzayev Sardor nomidan bir tomondan, va</p>
                 <p>1.2. "${escapeHtml(seller.name || "Kiritilmagan")}", keyingi o'rinlarda "Ishlab chiqaruvchi" deb yuritiladi, mazkur shartnomani quyidagilar to'g'risida tuzdilar:</p>
@@ -525,6 +577,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function buyerOrderContractHtml(total = 0) {
             const buyer = currentUserParty();
             return `<div class="contract-document">
+                ${contractPreviewMetaHtml()}
                 <h4>1. SHARTNOMA TOMONLARI</h4>
                 <p>1.1. "RoboTexnika" MCHJ, keyingi o'rinlarda "Platforma" deb yuritiladi, direktor Mirzayev Sardor nomidan, va</p>
                 <p>1.2. "${escapeHtml(buyer.name || "Kiritilmagan")}", keyingi o'rinlarda "Xaridor" deb yuritiladi, mazkur shartnomani quyidagilar to'g'risida tuzdilar:</p>
@@ -1440,6 +1493,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return `Foydalanuvchi: ${contract.signerName || "Noma'lum"}`;
         }
 
+        function contractDisplayNumber(contract) {
+            return contract?.contractNumber ? `${contract.contractNumber}-sonli` : "Raqam berilmagan";
+        }
+
         function renderContracts(container) {
             const contracts = DB.contracts || [];
             container.innerHTML = `
@@ -1454,7 +1511,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                         <thead><tr><th>Shartnoma</th><th>Tomonlar</th><th>Bog'lanish</th><th>Imzolangan vaqt</th><th>Amal</th></tr></thead>
                         <tbody>${contracts.map(contract => `
                             <tr>
-                                <td><b>${escapeHtml(contract.title || contractTypeLabel(contract.contractType))}</b><div class="text-xs text-muted">${escapeHtml(contractTypeLabel(contract.contractType))}</div></td>
+                                <td><b>${escapeHtml(contract.title || contractTypeLabel(contract.contractType))}</b><div class="text-xs text-muted">${escapeHtml(contractDisplayNumber(contract))} · ${escapeHtml(contractTypeLabel(contract.contractType))}</div></td>
                                 <td>${escapeHtml(contractRelationText(contract))}</td>
                                 <td class="text-sm text-muted">
                                     ${contract.orderId ? `Buyurtma #${escapeHtml(contract.orderId)}` : ""}
@@ -1475,6 +1532,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             modal(escapeHtml(contract.title || contractTypeLabel(contract.contractType)), `
                 <div class="details-list mb-4">
                     <div class="details-row"><span class="details-label">Turi:</span><span class="details-value">${escapeHtml(contractTypeLabel(contract.contractType))}</span></div>
+                    <div class="details-row"><span class="details-label">Raqami:</span><span class="details-value">${escapeHtml(contractDisplayNumber(contract))}</span></div>
                     <div class="details-row"><span class="details-label">Imzolovchi:</span><span class="details-value">${escapeHtml(contract.signerName || "Noma'lum")} (${escapeHtml(roleLabel(contract.signerRole))})</span></div>
                     ${contract.counterpartyName ? `<div class="details-row"><span class="details-label">Qarshi tomon:</span><span class="details-value">${escapeHtml(contract.counterpartyName)} (${escapeHtml(roleLabel(contract.counterpartyRole))})</span></div>` : ""}
                     ${contract.orderId ? `<div class="details-row"><span class="details-label">Buyurtma:</span><span class="details-value">#${escapeHtml(contract.orderId)}</span></div>` : ""}
@@ -1909,6 +1967,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function openPaymentModal(orderId, type) {
             const order = DB.orders.find(item => item.id === orderId);
             if (!order) return;
+            const orderContract = findBuyerOrderContract(order.id);
             
             let title = "";
             let body = "";
@@ -1916,13 +1975,24 @@ const STORAGE_KEY = "myDillerUzStateV2";
             
             if (type === "seller") {
                 const seller = userById(order.sellerId);
+                const paymentPurpose = buildPaymentPurpose({
+                    contract: orderContract,
+                    companyName: seller.name,
+                    description: "yetkazib berilgan mahsulot uchun to'lov"
+                });
                 title = "To'lov cheki (Sotuvchiga)";
                 body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
                     <div style="font-size:3.5rem;color:var(--primary);margin-bottom:1rem;"><i class="ri-secure-payment-line"></i></div>
                     <h3 class="mb-3">Sotuvchi rekvizitlari</h3>
                     <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
+                        <div style="margin-bottom:.5rem;">YATT/XK:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(formatEntityPaymentName(seller.name))}</b></div>
                         <div style="margin-bottom:.5rem;">Bank hisob raqami:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(seller.bankAccount || "Kiritilmagan")}</b></div>
                         <div>MFO:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(seller.bankMfo || "Kiritilmagan")}</b></div>
+                    </div>
+                    <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;text-align:left;">
+                        <div style="margin-bottom:.5rem;">Shartnoma raqami:<br><b style="font-size:1rem;color:var(--text-dark);">${escapeHtml(contractDisplayNumber(orderContract))}</b></div>
+                        <div style="margin-bottom:.5rem;">Shartnoma sanasi:<br><b style="font-size:1rem;color:var(--text-dark);">${escapeHtml(formatContractDateText(orderContract?.signedAt || ""))}</b></div>
+                        <div>To'lov maqsadi:<br><b style="font-size:1rem;color:var(--text-dark);">${escapeHtml(paymentPurpose)}</b></div>
                     </div>
                     <div class="mt-4 mb-2">
                         <div class="text-sm text-muted">To'lanadigan summa:</div>
@@ -1932,14 +2002,27 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 </div>`;
                 action = `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','buyer_paid')"><i class="ri-check-double-line"></i> To'ladim</button>`;
             } else if (type === "admin") {
+                const seller = userById(order.sellerId);
+                const sellerContract = findSellerPlatformContract(order.sellerId);
+                const paymentPurpose = buildPaymentPurpose({
+                    contract: sellerContract,
+                    companyName: seller.name,
+                    description: "platforma xizmatlari uchun to'lov"
+                });
                 title = "To'lov cheki (Komissiya)";
                 body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
                     <div style="font-size:3.5rem;color:var(--info);margin-bottom:1rem;"><i class="ri-bank-card-line"></i></div>
                     <h3 class="mb-3">Admin rekvizitlari (5% Komissiya)</h3>
                     <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
-                        <div style="margin-bottom:.5rem;">ИНН:<br><b style="font-size:1.1rem;color:var(--text-dark);">310938488</b></div>
-                        <div style="margin-bottom:.5rem;">Х/Р:<br><b style="font-size:1.1rem;color:var(--text-dark);">20208000905719313001</b></div>
-                        <div>МФО:<br><b style="font-size:1.1rem;color:var(--text-dark);">00446</b></div>
+                        <div style="margin-bottom:.5rem;">STIR:<br><b style="font-size:1.1rem;color:var(--text-dark);">310938488</b></div>
+                        <div style="margin-bottom:.5rem;">Hisob raqami:<br><b style="font-size:1.1rem;color:var(--text-dark);">20208000905719313001</b></div>
+                        <div>MFO:<br><b style="font-size:1.1rem;color:var(--text-dark);">00446</b></div>
+                    </div>
+                    <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;text-align:left;">
+                        <div style="margin-bottom:.5rem;">YATT/XK:<br><b style="font-size:1rem;color:var(--text-dark);">${escapeHtml(formatEntityPaymentName(seller.name))}</b></div>
+                        <div style="margin-bottom:.5rem;">Shartnoma raqami:<br><b style="font-size:1rem;color:var(--text-dark);">${escapeHtml(contractDisplayNumber(sellerContract))}</b></div>
+                        <div style="margin-bottom:.5rem;">Shartnoma sanasi:<br><b style="font-size:1rem;color:var(--text-dark);">${escapeHtml(formatContractDateText(sellerContract?.signedAt || ""))}</b></div>
+                        <div>To'lov maqsadi:<br><b style="font-size:1rem;color:var(--text-dark);">${escapeHtml(paymentPurpose)}</b></div>
                     </div>
                     <div class="mt-4 mb-2">
                         <div class="text-sm text-muted">To'lanadigan komissiya:</div>
@@ -1971,15 +2054,28 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function openFinancePaymentModal(orderId) {
             const order = DB.orders.find(item => item.id === orderId);
             if (!order) return;
+            const seller = userById(order.sellerId);
+            const sellerContract = findSellerPlatformContract(order.sellerId);
+            const paymentPurpose = buildPaymentPurpose({
+                contract: sellerContract,
+                companyName: seller.name,
+                description: "platforma xizmatlari uchun to'lov"
+            });
             
             const title = "To'lov cheki (Komissiya)";
             const body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
                 <div style="font-size:3.5rem;color:var(--info);margin-bottom:1rem;"><i class="ri-bank-card-line"></i></div>
                 <h3 class="mb-3">Admin rekvizitlari (5% Komissiya)</h3>
                 <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
-                    <div style="margin-bottom:.5rem;">ИНН:<br><b style="font-size:1.1rem;color:var(--text-dark);">310938488</b></div>
-                    <div style="margin-bottom:.5rem;">Х/Р:<br><b style="font-size:1.1rem;color:var(--text-dark);">20208000905719313001</b></div>
-                    <div>МФО:<br><b style="font-size:1.1rem;color:var(--text-dark);">00446</b></div>
+                    <div style="margin-bottom:.5rem;">STIR:<br><b style="font-size:1.1rem;color:var(--text-dark);">310938488</b></div>
+                    <div style="margin-bottom:.5rem;">Hisob raqami:<br><b style="font-size:1.1rem;color:var(--text-dark);">20208000905719313001</b></div>
+                    <div>MFO:<br><b style="font-size:1.1rem;color:var(--text-dark);">00446</b></div>
+                </div>
+                <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;text-align:left;">
+                    <div style="margin-bottom:.5rem;">YATT/XK:<br><b style="font-size:1rem;color:var(--text-dark);">${escapeHtml(formatEntityPaymentName(seller.name))}</b></div>
+                    <div style="margin-bottom:.5rem;">Shartnoma raqami:<br><b style="font-size:1rem;color:var(--text-dark);">${escapeHtml(contractDisplayNumber(sellerContract))}</b></div>
+                    <div style="margin-bottom:.5rem;">Shartnoma sanasi:<br><b style="font-size:1rem;color:var(--text-dark);">${escapeHtml(formatContractDateText(sellerContract?.signedAt || ""))}</b></div>
+                    <div>To'lov maqsadi:<br><b style="font-size:1rem;color:var(--text-dark);">${escapeHtml(paymentPurpose)}</b></div>
                 </div>
                 <div class="mt-4 mb-2">
                     <div class="text-sm text-muted">To'lanadigan komissiya:</div>
