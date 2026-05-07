@@ -755,6 +755,129 @@
             color: var(--muted);
         }
 
+        .profile-wrapper {
+            position: relative;
+        }
+
+        .profile-toggle {
+            min-height: 46px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.65rem;
+            padding: 0.25rem 0.35rem 0.25rem 0.85rem;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: white;
+            color: var(--text);
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.05);
+        }
+
+        .profile-toggle:hover {
+            border-color: rgba(13, 148, 136, 0.45);
+            color: var(--primary);
+        }
+
+        .profile-toggle .hide-sm {
+            display: grid;
+            gap: 0.08rem;
+            line-height: 1.15;
+        }
+
+        .profile-caret {
+            color: var(--muted);
+            font-size: 1.15rem;
+        }
+
+        .profile-dropdown {
+            position: absolute;
+            top: calc(100% + 0.65rem);
+            right: 0;
+            width: min(390px, calc(100vw - 2rem));
+            display: none;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: white;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            z-index: 45;
+        }
+
+        .profile-dropdown.open {
+            display: block;
+        }
+
+        .profile-head {
+            display: grid;
+            grid-template-columns: 44px minmax(0, 1fr);
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(135deg, #f0fdfa, #ffffff);
+        }
+
+        .profile-head b,
+        .profile-head .text-xs {
+            display: block;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .profile-head-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--primary), #14b8a6);
+            color: white;
+            font-weight: 900;
+        }
+
+        .profile-menu-item {
+            width: 100%;
+            min-height: 48px;
+            display: grid;
+            grid-template-columns: 28px minmax(0, 1fr) 20px;
+            align-items: center;
+            gap: 0.55rem;
+            padding: 0.8rem 1rem;
+            color: var(--text);
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .profile-menu-item:hover {
+            background: #f0fdfa;
+            color: var(--primary);
+        }
+
+        .profile-menu-item span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 800;
+        }
+
+        .profile-form {
+            padding: 0.95rem 1rem 1rem;
+            border-bottom: 1px solid var(--border);
+            background: #f8fafc;
+        }
+
+        .profile-form .input-group {
+            margin-bottom: 0.75rem;
+        }
+
+        .profile-logout {
+            color: var(--danger);
+            border-bottom: 0;
+        }
+
         .avatar {
             width: 43px;
             height: 43px;
@@ -1032,6 +1155,102 @@
             border-color: #bbf7d0;
         }
 
+        .ticket-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .ticket-card {
+            padding: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: linear-gradient(180deg, #ffffff, #f8fafc);
+            box-shadow: var(--shadow);
+            display: grid;
+            gap: 0.75rem;
+            min-width: 0;
+        }
+
+        .ticket-grid > .card {
+            grid-column: 1 / -1;
+        }
+
+        .ticket-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.65rem;
+            min-width: 0;
+        }
+
+        .ticket-title-row > b {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .ticket-subject {
+            min-width: 0;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+        }
+
+        .ticket-meta {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.55rem;
+            color: var(--muted);
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+
+        .ticket-user-chip {
+            max-width: 100%;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.36rem 0.6rem;
+            border: 1px solid #ccfbf1;
+            border-radius: 999px;
+            background: #f0fdfa;
+            color: var(--primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ticket-user-chip span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .ticket-message {
+            color: var(--text);
+            line-height: 1.55;
+            overflow-wrap: anywhere;
+        }
+
+        .ticket-reply-box {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .ticket-replies {
+            display: grid;
+            gap: 0.6rem;
+        }
+
+        .ticket-reply {
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: white;
+        }
+
         .report-thumb {
             min-height: 130px;
             border: 1px dashed #99f6e4;
@@ -1104,6 +1323,17 @@
                 z-index: 90;
             }
 
+            .profile-dropdown {
+                position: fixed;
+                top: calc(74px + 0.6rem);
+                left: 0.75rem;
+                right: 0.75rem;
+                width: auto;
+                max-height: calc(100dvh - 8.5rem);
+                overflow-y: auto;
+                z-index: 90;
+            }
+
             .notification-list {
                 max-height: calc(100dvh - 13rem);
             }
@@ -1126,6 +1356,12 @@
 
             #view-area {
                 padding-bottom: 5.5rem;
+            }
+        }
+
+        @media (min-width: 900px) {
+            .ticket-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
@@ -1159,6 +1395,22 @@
             .avatar {
                 width: 40px;
                 height: 40px;
+            }
+
+            .profile-toggle {
+                min-height: 42px;
+                padding: 0;
+                border-radius: 50%;
+                border-color: transparent;
+                box-shadow: none;
+            }
+
+            .profile-caret {
+                display: none;
+            }
+
+            .ticket-reply-box {
+                grid-template-columns: 1fr;
             }
 
             #view-area {
