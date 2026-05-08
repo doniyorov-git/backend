@@ -540,10 +540,22 @@ const STORAGE_KEY = "myDillerUzStateV2";
             </div>`;
         }
 
+        const PDF_TRANSLITERATION_MAP = {
+            "А": "A", "Б": "B", "В": "V", "Г": "G", "Д": "D", "Е": "E", "Ё": "Yo", "Ж": "J", "З": "Z", "И": "I", "Й": "Y", "К": "K", "Л": "L", "М": "M", "Н": "N", "О": "O", "П": "P", "Р": "R", "С": "S", "Т": "T", "У": "U", "Ф": "F", "Х": "X", "Ц": "Ts", "Ч": "Ch", "Ш": "Sh", "Щ": "Sh", "Ъ": "'", "Ы": "I", "Ь": "", "Э": "E", "Ю": "Yu", "Я": "Ya", "Ў": "O'", "Қ": "Q", "Ғ": "G'", "Ҳ": "H",
+            "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "yo", "ж": "j", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "x", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sh", "ъ": "'", "ы": "i", "ь": "", "э": "e", "ю": "yu", "я": "ya", "ў": "o'", "қ": "q", "ғ": "g'", "ҳ": "h",
+            "№": "No.", "–": "-", "—": "-", "ʼ": "'", "ʻ": "'", "‘": "'", "’": "'", "“": "\"", "”": "\"", "…": "..."
+        };
+
+        function transliteratePdfText(value) {
+            return String(value ?? "").replace(/[А-Яа-яЁёЎўҚқҒғҲҳ№–—ʼʻ‘’“”…]/g, char => PDF_TRANSLITERATION_MAP[char] || char);
+        }
+
         function pdfSafeText(value) {
-            return String(value ?? "")
+            return transliteratePdfText(value)
                 .normalize("NFKD")
-                .replace(/[^\x20-\x7E]/g, "?")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/\u00a0/g, " ")
+                .replace(/[^\x20-\x7E]/g, " ")
                 .replace(/\s+/g, " ")
                 .trim();
         }
@@ -997,88 +1009,143 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return bytes;
         }
 
-        async function renderInvoiceHtmlToJpeg(html, width = 1123, height = 794) {
-            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
-            const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            try {
-                const image = new Image();
-                const loaded = new Promise((resolve, reject) => {
-                    image.onload = resolve;
-                    image.onerror = reject;
+        function drawStandardInvoiceParty(commands, title, party, x, topY, width) {
+            drawRect(commands, x, topY - 94, width, 94, { fill: "#f8fafc", color: "#cbd5e1" });
+            drawRect(commands, x, topY - 20, width, 20, { fill: "#e2e8f0", color: "#cbd5e1" });
+            drawText(commands, title, x + 10, topY - 13, { size: 8.3, bold: true, color: "#0f172a", maxChars: 42 });
+            drawText(commands, `Nomi: ${party.name}`, x + 10, topY - 34, { size: 7.5, bold: true, maxChars: 64, maxLines: 1 });
+            drawText(commands, `Manzil: ${party.address}`, x + 10, topY - 48, { size: 7.2, maxChars: 72, maxLines: 1 });
+            drawText(commands, `STIR: ${party.inn || "Kiritilmagan"}`, x + 10, topY - 62, { size: 7.2, maxChars: 60, maxLines: 1 });
+            drawText(commands, `QQS kodi: ${party.vatCode || "-"}`, x + 10, topY - 76, { size: 7.2, maxChars: 60, maxLines: 1 });
+            drawText(commands, `H/r: ${party.bankAccount || "Kiritilmagan"}   MFO: ${party.bankMfo || "Kiritilmagan"}`, x + 10, topY - 90, { size: 7.2, maxChars: 76, maxLines: 1 });
+        }
+
+        function drawStandardInvoiceTableHeader(commands, x, y, columns) {
+            const tableWidth = columns.reduce((sum, column) => sum + column.width, 0);
+            drawRect(commands, x, y, tableWidth, 34, { fill: "#1e40af", color: "#1e40af" });
+            let currentX = x;
+            columns.forEach(column => {
+                const textX = currentX + (column.align === "right" ? column.width - 4 : column.align === "center" ? column.width / 2 : 4);
+                drawText(commands, column.title, textX, y + 22, { size: 5.7, bold: true, color: "#ffffff", align: column.align, maxChars: Math.max(5, Math.floor(column.width / 3.4)), maxLines: 2, lineHeight: 6.5 });
+                drawLine(commands, currentX, y, currentX, y + 34, "#ffffff", 0.3);
+                currentX += column.width;
+            });
+            drawLine(commands, x + tableWidth, y, x + tableWidth, y + 34, "#ffffff", 0.3);
+        }
+
+        function drawStandardInvoiceRows(commands, rows, startIndex, x, firstRowY, columns, rowHeight = 34) {
+            const tableWidth = columns.reduce((sum, column) => sum + column.width, 0);
+            let currentY = firstRowY;
+            rows.forEach((row, rowIndex) => {
+                drawRect(commands, x, currentY, tableWidth, rowHeight, { fill: rowIndex % 2 ? "#ffffff" : "#f8fafc", color: "#cbd5e1" });
+                const values = [
+                    String(startIndex + rowIndex + 1),
+                    row.name,
+                    row.catalog,
+                    row.unit,
+                    formatInvoiceQuantity(row.qty),
+                    formatInvoiceMoney(row.price),
+                    formatInvoiceMoney(row.delivery),
+                    "QQSsiz",
+                    "-",
+                    formatInvoiceMoney(row.total),
+                    row.origin
+                ];
+                let currentX = x;
+                columns.forEach((column, columnIndex) => {
+                    const textX = currentX + (column.align === "right" ? column.width - 4 : column.align === "center" ? column.width / 2 : 4);
+                    drawText(commands, values[columnIndex], textX, currentY + rowHeight - 11, { size: 5.9, bold: columnIndex === 1, align: column.align, maxChars: Math.max(4, Math.floor(column.width / 3.5)), maxLines: 3, lineHeight: 6.8 });
+                    drawLine(commands, currentX, currentY, currentX, currentY + rowHeight, "#cbd5e1", 0.3);
+                    currentX += column.width;
                 });
-                image.src = url;
-                await loaded;
-                const scale = 2;
-                const canvas = document.createElement("canvas");
-                canvas.width = width * scale;
-                canvas.height = height * scale;
-                const context = canvas.getContext("2d");
-                context.fillStyle = "#ffffff";
-                context.fillRect(0, 0, canvas.width, canvas.height);
-                context.drawImage(image, 0, 0, canvas.width, canvas.height);
-                return {
-                    data: atob(canvas.toDataURL("image/jpeg", 0.96).split(",")[1]),
-                    width: canvas.width,
-                    height: canvas.height
-                };
-            } finally {
-                URL.revokeObjectURL(url);
-            }
+                drawLine(commands, x + tableWidth, currentY, x + tableWidth, currentY + rowHeight, "#cbd5e1", 0.3);
+                currentY -= rowHeight;
+            });
+            return currentY;
         }
 
-        function createPdfBlobFromJpegs(images, pageWidth = 842, pageHeight = 595) {
-            const pageIds = images.map((_, index) => 3 + index * 3);
-            const objects = [
-                "<< /Type /Catalog /Pages 2 0 R >>",
-                `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] /Count ${images.length} >>`
+        function drawStandardInvoicePage({ order, type, rows, pageIndex, pageCount, allRows }) {
+            const pageWidth = 842;
+            const pageHeight = 595;
+            const margin = 30;
+            const tableX = margin;
+            const seller = userById(order.sellerId);
+            const buyer = userById(order.buyerId);
+            const platform = platformPaymentParty();
+            const supplier = invoicePartyForTemplate(type === "admin" ? { ...platform, role: "platform" } : seller, type === "admin" ? "MCHJ" : "XK");
+            const customer = invoicePartyForTemplate(type === "admin" ? seller : buyer, type === "admin" ? "XK" : "MCHJ");
+            const documentDate = formatInvoiceDate(order.invoiceGeneratedAt || order.updatedAt || order.createdAt || order.date);
+            const documentNumber = invoiceTemplateNumber(order, type);
+            const totals = invoiceTotalsForTemplate(allRows);
+            const continuation = pageIndex > 0 ? " (davomi)" : "";
+            const commands = [];
+            const columns = [
+                { title: "N", width: 24, align: "center" },
+                { title: "Mahsulot nomi", width: 141 },
+                { title: "Yagona katalog kodi va nomi", width: 141 },
+                { title: "Birlik", width: 43, align: "center" },
+                { title: "Miqdor", width: 47, align: "right" },
+                { title: "Narx", width: 64, align: "right" },
+                { title: "Yetkazish qiymati", width: 68, align: "right" },
+                { title: "QQS", width: 43, align: "center" },
+                { title: "QQS summa", width: 56, align: "right" },
+                { title: "Jami", width: 74, align: "right" },
+                { title: "Kelib chiqishi", width: 81 }
             ];
-            images.forEach((image, index) => {
-                const pageId = 3 + index * 3;
-                const contentId = pageId + 1;
-                const imageId = pageId + 2;
-                const imageName = `Im${index + 1}`;
-                const content = `q\n${pageWidth} 0 0 ${pageHeight} 0 0 cm\n/${imageName} Do\nQ`;
-                objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /${imageName} ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`);
-                objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
-                objects.push(`<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${image.data.length} >>\nstream\n${image.data}\nendstream`);
-            });
+            const tableWidth = columns.reduce((sum, column) => sum + column.width, 0);
+            const rowHeight = 34;
+            const headerY = 328;
+            const rowStartY = headerY - rowHeight;
 
-            let pdf = "%PDF-1.4\n";
-            const offsets = [0];
-            objects.forEach((object, index) => {
-                offsets[index + 1] = pdf.length;
-                pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
-            });
-            const xrefOffset = pdf.length;
-            pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-            for (let index = 1; index <= objects.length; index += 1) {
-                pdf += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+            drawRect(commands, 0, pageHeight - 8, pageWidth, 8, { fill: "#1e40af", stroke: false });
+            drawText(commands, invoiceTemplateContractLine(order, type), pageWidth / 2, 570, { size: 8.5, bold: true, align: "center", color: "#334155", maxChars: 120 });
+            drawText(commands, `${documentDate} dagi ${documentNumber}-sonli${continuation}`, pageWidth / 2, 553, { size: 9.2, bold: true, align: "center", color: "#0f172a", maxChars: 120 });
+            drawText(commands, "STANDART HISOBVARAQ-FAKTURA", pageWidth / 2, 532, { size: 15, bold: true, align: "center", color: "#1e3a8a", maxChars: 80 });
+            drawText(commands, `Jami to'lov uchun: ${numberToUzCyrillic(totals.total)}. QQSsiz.`, pageWidth / 2, 511, { size: 8.4, bold: true, align: "center", color: "#111827", maxChars: 132 });
+
+            drawStandardInvoiceParty(commands, "Yetkazib beruvchi", supplier, margin, 492, 382);
+            drawStandardInvoiceParty(commands, "Sotib oluvchi", customer, margin + 400, 492, 382);
+            drawStandardInvoiceTableHeader(commands, tableX, headerY, columns);
+            drawStandardInvoiceRows(commands, rows, pageIndex * 6, tableX, rowStartY, columns, rowHeight);
+
+            if (pageIndex === pageCount - 1) {
+                drawRect(commands, tableX, 70, tableWidth, 24, { fill: "#eef2ff", color: "#93c5fd" });
+                drawText(commands, "Jami", tableX + 8, 85, { size: 7.2, bold: true, color: "#1e3a8a", maxChars: 20 });
+                drawText(commands, formatInvoiceMoney(totals.delivery), tableX + 520, 85, { size: 7.1, bold: true, align: "right", color: "#1e3a8a", maxChars: 20 });
+                drawText(commands, "QQSsiz", tableX + 550, 85, { size: 7.1, align: "center", color: "#1e3a8a", maxChars: 16 });
+                drawText(commands, "-", tableX + 605, 85, { size: 7.1, align: "center", color: "#1e3a8a", maxChars: 10 });
+                drawText(commands, formatInvoiceMoney(totals.total), tableX + 700, 85, { size: 7.1, bold: true, align: "right", color: "#1e3a8a", maxChars: 20 });
+
+                drawText(commands, "Rahbar:", margin, 51, { size: 7.2, bold: true, maxChars: 16 });
+                drawLine(commands, margin + 44, 49, margin + 230, 49, "#94a3b8", 0.45);
+                drawText(commands, supplier.director, margin + 48, 53, { size: 6.6, maxChars: 34, maxLines: 1 });
+                drawText(commands, "Tovar berdi:", margin + 250, 51, { size: 7.2, bold: true, maxChars: 18 });
+                drawLine(commands, margin + 316, 49, margin + 440, 49, "#94a3b8", 0.45);
+                drawText(commands, "Qabul qildi:", margin + 462, 51, { size: 7.2, bold: true, maxChars: 18 });
+                drawLine(commands, margin + 528, 49, margin + 690, 49, "#94a3b8", 0.45);
             }
-            pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-            return new Blob([binaryStringToBytes(pdf)], { type: "application/pdf" });
+
+            drawText(commands, "Standart PDF", margin, 22, { size: 6.8, color: "#64748b", maxChars: 24 });
+            drawText(commands, `${pageIndex + 1} / ${pageCount}`, pageWidth - margin, 22, { size: 6.8, align: "right", color: "#64748b", maxChars: 12 });
+            return commands;
         }
 
-        async function createInvoicePdfBlob(order, type) {
+        function createInvoicePdfBlob(order, type) {
             const rows = invoiceRowDataForTemplate(order, type);
             const chunkSize = 6;
             const chunks = [];
             for (let index = 0; index < Math.max(rows.length, 1); index += chunkSize) {
                 chunks.push(rows.slice(index, index + chunkSize));
             }
-            const images = [];
-            for (let index = 0; index < chunks.length; index += 1) {
-                const html = invoiceHtmlPage({
+            const pages = chunks.map((chunk, index) => drawStandardInvoicePage({
                     order,
                     type,
-                    rows: chunks[index],
+                    rows: chunk,
                     pageIndex: index,
                     pageCount: chunks.length,
                     allRows: rows
-                });
-                images.push(await renderInvoiceHtmlToJpeg(html));
-            }
-            return createPdfBlobFromJpegs(images);
+                }));
+            return createPdfBlobFromPages(pages);
         }
 
         function sellerPaymentInvoiceBlob(order) {
