@@ -1114,21 +1114,29 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 drawText(commands, "-", tableX + 605, 85, { size: 7.1, align: "center", color: "#1e3a8a", maxChars: 10 });
                 drawText(commands, formatInvoiceMoney(totals.total), tableX + 700, 85, { size: 7.1, bold: true, align: "right", color: "#1e3a8a", maxChars: 20 });
 
-                drawText(commands, "Rahbar:", margin, 51, { size: 7.2, bold: true, maxChars: 16 });
-                drawLine(commands, margin + 44, 49, margin + 210, 49, "#94a3b8", 0.45);
-                drawText(commands, supplier.director, margin + 48, 53, { size: 6.6, maxChars: 30, maxLines: 1 });
-                drawText(commands, "Bosh hisobchi:", margin + 230, 51, { size: 7.2, bold: true, maxChars: 22 });
-                drawLine(commands, margin + 316, 49, margin + 450, 49, "#94a3b8", 0.45);
-                drawText(commands, "Tovar berdi:", margin, 31, { size: 7.2, bold: true, maxChars: 18 });
-                drawLine(commands, margin + 66, 29, margin + 210, 29, "#94a3b8", 0.45);
-                drawText(commands, supplier.director, margin + 70, 33, { size: 6.6, maxChars: 26, maxLines: 1 });
-                drawText(commands, "Qabul qildi:", margin + 462, 51, { size: 7.2, bold: true, maxChars: 18 });
-                drawLine(commands, margin + 528, 49, pageWidth - margin, 49, "#94a3b8", 0.45);
-                drawText(commands, "Bosh hisobchi:", margin + 462, 31, { size: 7.2, bold: true, maxChars: 22 });
-                drawLine(commands, margin + 548, 29, pageWidth - margin, 29, "#94a3b8", 0.45);
+                const drawSignatureColumn = (x, labelWidth, rows) => {
+                    rows.forEach((row, index) => {
+                        const y = 56 - index * 15;
+                        drawText(commands, row.label, x, y, { size: 7.2, bold: true, maxChars: 24 });
+                        drawLine(commands, x + labelWidth, y - 2, x + 330, y - 2, "#94a3b8", 0.45);
+                        if (row.value) {
+                            drawText(commands, row.value, x + labelWidth + 4, y + 2, { size: 6.6, maxChars: 36, maxLines: 1 });
+                        }
+                    });
+                };
+                drawSignatureColumn(margin, 88, [
+                    { label: "Rahbar:", value: supplier.director },
+                    { label: "Bosh hisobchi:", value: "" },
+                    { label: "Tovar berdi:", value: supplier.director }
+                ]);
+                drawSignatureColumn(margin + 420, 88, [
+                    { label: "Rahbar:", value: customer.director },
+                    { label: "Bosh hisobchi:", value: "" },
+                    { label: "Qabul qildi:", value: "" }
+                ]);
             }
 
-            drawText(commands, `${pageIndex + 1} / ${pageCount}`, pageWidth - margin, 22, { size: 6.8, align: "right", color: "#64748b", maxChars: 12 });
+            drawText(commands, `${pageIndex + 1} / ${pageCount}`, pageWidth - margin, 10, { size: 6.8, align: "right", color: "#64748b", maxChars: 12 });
             return commands;
         }
 
