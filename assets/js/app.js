@@ -802,7 +802,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return {
                 name: legalPartyName(normalized.name, defaultSuffix),
                 inn: partyRequisite(normalized, "inn", ""),
-                vatCode: normalized.vatCode || normalized.vat_code || "",
+                phone: partyRequisite(normalized, "phone", ""),
                 bankAccount: partyRequisite(normalized, "bankAccount", ""),
                 bankMfo: partyRequisite(normalized, "bankMfo", ""),
                 director: normalized.director || normalized.name || ""
@@ -879,7 +879,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 <div class="party">
                     <div class="party-row"><b>${cell(title)}:</b><span>${cell(party.name)}</span></div>
                     <div class="party-row"><b>${cell(taxLabel)}:</b><span>${cell(party.inn)}</span></div>
-                    <div class="party-row"><b>ҚҚС тўловчининг рўйхатдан ўтиш коди:</b><span>${cell(party.vatCode)}</span></div>
+                    <div class="party-row"><b>Телефон:</b><span>${cell(party.phone)}</span></div>
                     <div class="party-row"><b>Х/Р:</b><span>${cell(party.bankAccount)}</span></div>
                     <div class="party-row"><b>МФО:</b><span>${cell(party.bankMfo)}</span></div>
                 </div>
@@ -990,7 +990,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                                 </div>
                             </div>` : ""}
                         </div>
-                        <div class="footer"><span>Стандарт</span><span>${pageIndex + 1} / ${pageCount}</span></div>
+                        <div class="footer"><span></span><span>${pageIndex + 1} / ${pageCount}</span></div>
                     </div>
                 </div>`;
         }
@@ -1004,13 +1004,14 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function drawStandardInvoiceParty(commands, title, party, x, topY, width) {
-            drawRect(commands, x, topY - 80, width, 80, { fill: "#f8fafc", color: "#cbd5e1" });
+            drawRect(commands, x, topY - 94, width, 94, { fill: "#f8fafc", color: "#cbd5e1" });
             drawRect(commands, x, topY - 20, width, 20, { fill: "#e2e8f0", color: "#cbd5e1" });
             drawText(commands, title, x + 10, topY - 13, { size: 8.3, bold: true, color: "#0f172a", maxChars: 42 });
             drawText(commands, `Nomi: ${party.name}`, x + 10, topY - 34, { size: 7.5, bold: true, maxChars: 64, maxLines: 1 });
             drawText(commands, `STIR: ${party.inn || "Kiritilmagan"}`, x + 10, topY - 48, { size: 7.2, maxChars: 60, maxLines: 1 });
-            drawText(commands, `QQS kodi: ${party.vatCode || "-"}`, x + 10, topY - 62, { size: 7.2, maxChars: 60, maxLines: 1 });
-            drawText(commands, `H/r: ${party.bankAccount || "Kiritilmagan"}   MFO: ${party.bankMfo || "Kiritilmagan"}`, x + 10, topY - 76, { size: 7.2, maxChars: 76, maxLines: 1 });
+            drawText(commands, `Telefon: ${party.phone || "Kiritilmagan"}`, x + 10, topY - 62, { size: 7.2, maxChars: 60, maxLines: 1 });
+            drawText(commands, `H/r: ${party.bankAccount || "Kiritilmagan"}`, x + 10, topY - 76, { size: 7.2, maxChars: 76, maxLines: 1 });
+            drawText(commands, `MFO: ${party.bankMfo || "Kiritilmagan"}`, x + 10, topY - 90, { size: 7.2, maxChars: 76, maxLines: 1 });
         }
 
         function drawStandardInvoiceTableHeader(commands, x, y, columns) {
@@ -1093,7 +1094,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             drawRect(commands, 0, pageHeight - 8, pageWidth, 8, { fill: "#1e40af", stroke: false });
             drawText(commands, invoiceTemplateContractLine(order, type), pageWidth / 2, 570, { size: 8.5, bold: true, align: "center", color: "#334155", maxChars: 120 });
             drawText(commands, `${documentDate} dagi ${documentNumber}-sonli${continuation}`, pageWidth / 2, 553, { size: 9.2, bold: true, align: "center", color: "#0f172a", maxChars: 120 });
-            drawText(commands, "STANDART HISOBVARAQ-FAKTURA", pageWidth / 2, 532, { size: 15, bold: true, align: "center", color: "#1e3a8a", maxChars: 80 });
+            drawText(commands, "HISOBVARAQ-FAKTURA", pageWidth / 2, 532, { size: 15, bold: true, align: "center", color: "#1e3a8a", maxChars: 80 });
             drawText(commands, `Jami to'lov uchun: ${numberToUzCyrillic(totals.total)}. QQSsiz.`, pageWidth / 2, 511, { size: 8.4, bold: true, align: "center", color: "#111827", maxChars: 132 });
 
             drawStandardInvoiceParty(commands, "Yetkazib beruvchi", supplier, margin, 492, 382);
@@ -1110,15 +1111,19 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 drawText(commands, formatInvoiceMoney(totals.total), tableX + 700, 85, { size: 7.1, bold: true, align: "right", color: "#1e3a8a", maxChars: 20 });
 
                 drawText(commands, "Rahbar:", margin, 51, { size: 7.2, bold: true, maxChars: 16 });
-                drawLine(commands, margin + 44, 49, margin + 230, 49, "#94a3b8", 0.45);
-                drawText(commands, supplier.director, margin + 48, 53, { size: 6.6, maxChars: 34, maxLines: 1 });
-                drawText(commands, "Tovar berdi:", margin + 250, 51, { size: 7.2, bold: true, maxChars: 18 });
-                drawLine(commands, margin + 316, 49, margin + 440, 49, "#94a3b8", 0.45);
+                drawLine(commands, margin + 44, 49, margin + 210, 49, "#94a3b8", 0.45);
+                drawText(commands, supplier.director, margin + 48, 53, { size: 6.6, maxChars: 30, maxLines: 1 });
+                drawText(commands, "Bosh hisobchi:", margin + 230, 51, { size: 7.2, bold: true, maxChars: 22 });
+                drawLine(commands, margin + 316, 49, margin + 450, 49, "#94a3b8", 0.45);
+                drawText(commands, "Tovar berdi:", margin, 31, { size: 7.2, bold: true, maxChars: 18 });
+                drawLine(commands, margin + 66, 29, margin + 210, 29, "#94a3b8", 0.45);
+                drawText(commands, supplier.director, margin + 70, 33, { size: 6.6, maxChars: 26, maxLines: 1 });
                 drawText(commands, "Qabul qildi:", margin + 462, 51, { size: 7.2, bold: true, maxChars: 18 });
-                drawLine(commands, margin + 528, 49, margin + 690, 49, "#94a3b8", 0.45);
+                drawLine(commands, margin + 528, 49, pageWidth - margin, 49, "#94a3b8", 0.45);
+                drawText(commands, "Bosh hisobchi:", margin + 462, 31, { size: 7.2, bold: true, maxChars: 22 });
+                drawLine(commands, margin + 548, 29, pageWidth - margin, 29, "#94a3b8", 0.45);
             }
 
-            drawText(commands, "Standart PDF", margin, 22, { size: 6.8, color: "#64748b", maxChars: 24 });
             drawText(commands, `${pageIndex + 1} / ${pageCount}`, pageWidth - margin, 22, { size: 6.8, align: "right", color: "#64748b", maxChars: 12 });
             return commands;
         }
