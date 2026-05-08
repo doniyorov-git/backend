@@ -41,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $category = $_POST['category'] ?? '';
     $region = $_POST['region'] ?? '';
     $model = $_POST['model'] ?? '';
+    $mxikCode = preg_replace('/\D+/', '', $_POST['mxik_code'] ?? $_POST['mxikCode'] ?? '');
     $price = $_POST['price'] ?? 0;
     $unit = $_POST['unit'] ?? 'dona';
     $prepayPercent = $_POST['prepay_percent'] ?? $_POST['prepayPercent'] ?? null;
@@ -49,6 +50,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
     if (!$name || !$category || !$region || !$model || (float) $price <= 0) {
         sendJson(['success' => false, 'message' => 'Mahsulot nomi, kategoriya, viloyat, model va narx majburiy'], 400);
+    }
+
+    if (!$mxikCode || strlen($mxikCode) < 5 || strlen($mxikCode) > 32) {
+        sendJson(['success' => false, 'message' => 'MXIK kodini to\'g\'ri kiriting'], 400);
     }
 
     if (!in_array($model, ['realization', 'prepayment'], true)) {
@@ -81,21 +86,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $imagePath = $imagePath ?: $existing['image'];
         $stmt = $pdo->prepare("
             UPDATE products
-            SET name = ?, category = ?, region = ?, model = ?, price = ?, unit = ?, image = ?,
+            SET name = ?, mxik_code = ?, category = ?, region = ?, model = ?, price = ?, unit = ?, image = ?,
                 prepay_percent = ?, real_days = ?, photo_days = ?,
                 status = 'pending', moderation_note = NULL, moderated_by = NULL, moderated_at = NULL
             WHERE id = ? AND seller_id = ?
         ");
-        $stmt->execute([$name, $category, $region, $model, $price, $unit, $imagePath, $prepayPercent, $realDays, $photoDays, $id, $sellerId]);
+        $stmt->execute([$name, $mxikCode, $category, $region, $model, $price, $unit, $imagePath, $prepayPercent, $realDays, $photoDays, $id, $sellerId]);
         notifyRole($pdo, 'admin', 'Mahsulot qayta moderatsiyaga yuborildi', $name . ' mahsuloti tekshiruv kutmoqda.', 'warning', 'admin-moderation');
     } else {
         $id = uniqid('p_');
         $sku = generateProductSku($pdo);
         $stmt = $pdo->prepare("
-            INSERT INTO products (id, seller_id, name, sku, category, region, model, price, unit, image, prepay_percent, real_days, photo_days, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+            INSERT INTO products (id, seller_id, name, sku, mxik_code, category, region, model, price, unit, image, prepay_percent, real_days, photo_days, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
         ");
-        $stmt->execute([$id, $sellerId, $name, $sku, $category, $region, $model, $price, $unit, $imagePath, $prepayPercent, $realDays, $photoDays]);
+        $stmt->execute([$id, $sellerId, $name, $sku, $mxikCode, $category, $region, $model, $price, $unit, $imagePath, $prepayPercent, $realDays, $photoDays]);
         recordContractSignature($pdo, 'seller_listing', $sellerId, null, ['source' => 'product_create']);
         notifyRole($pdo, 'admin', 'Yangi mahsulot moderatsiyada', $name . ' mahsuloti tasdiqlash uchun yuborildi.', 'info', 'admin-moderation');
     }

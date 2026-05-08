@@ -162,6 +162,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     sellerId: p.seller_id,
                     sellerName: p.seller_name,
                     sellerPhone: p.seller_phone,
+                    mxikCode: p.mxik_code || p.mxikCode || "",
                     prepayPercent: parseNumberOrDefault(p.prepay_percent ?? p.prepayPercent, p.model === "prepayment" ? 30 : 0),
                     realDays: parseNumberOrDefault(p.real_days ?? p.realDays, 30),
                     photoDays: parseNumberOrDefault(p.photo_days ?? p.photoDays, 15),
@@ -170,7 +171,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     viewCount: p.view_count,
                     createdAt: p.created_at
                 });
-                const mapOrderItem = item => ({ ...item, prodId: item.product_id || item.prodId, productName: item.product_name || item.productName, qty: Number(item.quantity || item.qty || 0), price: Number(item.price || 0), unit: item.unit });
+                const mapOrderItem = item => ({ ...item, prodId: item.product_id || item.prodId, productName: item.product_name || item.productName, qty: Number(item.quantity || item.qty || 0), price: Number(item.price || 0), unit: item.unit, sku: item.sku, mxikCode: item.mxik_code || item.mxikCode || "", category: item.category });
                 const mapOrder = o => ({
                     ...o,
                     buyerId: o.buyer_id,
@@ -292,6 +293,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
 
         function mfoDigits(value) {
             return String(value || "").replace(/\D/g, "").slice(0, 5);
+        }
+
+        function mxikDigits(value) {
+            return String(value || "").replace(/\D/g, "").slice(0, 32);
         }
 
         function normalizeSessionUser(user) {
@@ -652,6 +657,17 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return { net, vat, total };
         }
 
+        function rowProductMeta(item, product) {
+            const mxikCode = item.mxikCode || item.mxik_code || product.mxikCode || product.mxik_code || "";
+            const sku = item.sku || product.sku || "";
+            const category = categoryByValue(item.category || product.category || "other").label;
+            return {
+                mxikCode: mxikCode || "Kiritilmagan",
+                sku: sku || "SKU yo'q",
+                catalog: `MXIK: ${mxikCode || "Kiritilmagan"}; SKU: ${sku || "SKU yo'q"}; ${category}`
+            };
+        }
+
         function partyRequisite(party, key, fallback = "Kiritilmagan") {
             return party?.[key] || party?.[key.replace(/[A-Z]/g, char => "_" + char.toLowerCase())] || fallback;
         }
@@ -684,7 +700,8 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 const totals = invoiceTotals(amount);
                 return [{
                     name: `Platforma vositachilik xizmati, buyurtma #${order.id}`,
-                    catalog: "74900000000000000 - Vositachilik xizmatlari",
+                    catalog: "MXIK: 74900000000000000; Platforma vositachilik xizmatlari",
+                    mxikCode: "74900000000000000",
                     unit: "xizmat",
                     qty: 1,
                     price: amount,
@@ -701,9 +718,11 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 const price = Number(item.price || product.price || 0);
                 const total = qty * price;
                 const totals = invoiceTotals(total);
+                const meta = rowProductMeta(item, product);
                 return {
                     name: item.productName || product.name || "Mahsulot",
-                    catalog: `${product.sku || "00000000000000000"} - ${categoryByValue(product.category || "other").label}`,
+                    catalog: meta.catalog,
+                    mxikCode: meta.mxikCode,
                     unit: item.unit || product.unit || "dona",
                     qty,
                     price,
@@ -736,8 +755,13 @@ const STORAGE_KEY = "myDillerUzStateV2";
             const tableWidth = pageWidth - margin * 2;
             const title = type === "admin" ? "Komissiya hisobvaraq-faktura" : "Hisobvaraq-faktura";
 
-            drawRect(commands, 0, pageHeight - 88, pageWidth, 88, { fill: type === "admin" ? "#fff7ed" : "#ecfeff", stroke: false });
-            drawRect(commands, 0, pageHeight - 8, pageWidth, 8, { fill: type === "admin" ? "#f97316" : "#0f766e", stroke: false });
+            const accent = type === "admin" ? "#f97316" : "#0f766e";
+            const accentDark = type === "admin" ? "#c2410c" : "#0f766e";
+            const headerFill = type === "admin" ? "#fff7ed" : "#ecfeff";
+            drawRect(commands, 0, pageHeight - 88, pageWidth, 88, { fill: headerFill, stroke: false });
+            drawRect(commands, 0, pageHeight - 8, pageWidth, 8, { fill: accent, stroke: false });
+            drawRect(commands, margin, 535, 74, 24, { fill: "#ffffff", color: type === "admin" ? "#fed7aa" : "#99f6e4" });
+            drawText(commands, "STANDART", margin + 37, 543, { size: 8, bold: true, align: "center", color: accentDark });
             drawText(commands, title, pageWidth / 2, 552, { size: 20, bold: true, align: "center", color: type === "admin" ? "#c2410c" : "#0f766e", maxChars: 70 });
             drawText(commands, `${date.display} dagi ${number}-sonli`, pageWidth / 2, 530, { size: 10, bold: true, align: "center", color: "#334155", maxChars: 90 });
             drawText(commands, contractReferenceText(contract, order.createdAt || order.date), pageWidth / 2, 512, { size: 9, align: "center", color: "#475569", maxChars: 110 });
@@ -745,17 +769,17 @@ const STORAGE_KEY = "myDillerUzStateV2";
             drawInvoiceParty(commands, "Yetkazib beruvchi", supplier, margin, 488, 370);
             drawInvoiceParty(commands, "Sotib oluvchi", customer, margin + 400, 488, 370);
 
-            drawRect(commands, margin, 392, tableWidth, 38, { fill: "#f8fafc", color: "#dbe4ee" });
-            drawText(commands, "Buyurtma", margin + 12, 414, { size: 8, bold: true, color: "#64748b" });
-            drawText(commands, `#${order.id}`, margin + 12, 400, { size: 8.4, bold: true, color: "#111827", maxChars: 28 });
-            drawText(commands, "Holat", margin + 186, 414, { size: 8, bold: true, color: "#64748b" });
-            drawText(commands, statusBadge(order.status).replace(/<[^>]+>/g, ""), margin + 186, 400, { size: 8.4, bold: true, color: "#111827", maxChars: 30 });
-            drawText(commands, type === "admin" ? "Komissiya muddati" : "To'lov muddati", margin + 360, 414, { size: 8, bold: true, color: "#64748b" });
-            drawText(commands, type === "admin" ? (order.commissionDueAt ? formatDateTime(order.commissionDueAt) : `${COMMISSION_PAYMENT_DAYS} kun`) : (order.buyerPaymentDueAt ? formatDateTime(order.buyerPaymentDueAt) : `${BUYER_PAYMENT_DAYS} kun`), margin + 360, 400, { size: 8.4, bold: true, color: "#111827", maxChars: 36 });
-            drawText(commands, "Jami", margin + 568, 414, { size: 8, bold: true, color: "#64748b" });
-            drawText(commands, money(totals.total), margin + 568, 400, { size: 8.4, bold: true, color: type === "admin" ? "#c2410c" : "#0f766e", maxChars: 36 });
+            drawRect(commands, margin, 354, tableWidth, 38, { fill: "#f8fafc", color: "#dbe4ee" });
+            drawText(commands, "Buyurtma", margin + 12, 376, { size: 8, bold: true, color: "#64748b" });
+            drawText(commands, `#${order.id}`, margin + 12, 362, { size: 8.4, bold: true, color: "#111827", maxChars: 28 });
+            drawText(commands, "Holat", margin + 186, 376, { size: 8, bold: true, color: "#64748b" });
+            drawText(commands, statusBadge(order.status).replace(/<[^>]+>/g, ""), margin + 186, 362, { size: 8.4, bold: true, color: "#111827", maxChars: 30 });
+            drawText(commands, type === "admin" ? "Komissiya muddati" : "To'lov muddati", margin + 360, 376, { size: 8, bold: true, color: "#64748b" });
+            drawText(commands, type === "admin" ? (order.commissionDueAt ? formatDateTime(order.commissionDueAt) : `${COMMISSION_PAYMENT_DAYS} kun`) : (order.buyerPaymentDueAt ? formatDateTime(order.buyerPaymentDueAt) : `${BUYER_PAYMENT_DAYS} kun`), margin + 360, 362, { size: 8.4, bold: true, color: "#111827", maxChars: 36 });
+            drawText(commands, "Jami", margin + 568, 376, { size: 8, bold: true, color: "#64748b" });
+            drawText(commands, money(totals.total), margin + 568, 362, { size: 8.4, bold: true, color: accentDark, maxChars: 36 });
 
-            drawText(commands, "To'lov maqsadi", margin, 372, { size: 9, bold: true, color: type === "admin" ? "#c2410c" : "#0f766e" });
+            drawText(commands, "To'lov maqsadi", margin, 334, { size: 9, bold: true, color: accentDark });
             const purpose = paymentPurposeText({
                 contract,
                 fallbackDate: order.createdAt || order.date,
@@ -763,21 +787,21 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 defaultSuffix: type === "admin" ? "MCHJ" : "XK",
                 serviceText: type === "admin" ? "platforma xizmatlari uchun to'lov" : "yetkazib berilgan mahsulotlar uchun to'lov"
             });
-            drawText(commands, purpose, margin + 86, 372, { size: 8.3, maxChars: 118, color: "#475569", maxLines: 2 });
+            drawText(commands, purpose, margin + 86, 334, { size: 8.3, maxChars: 118, color: "#475569", maxLines: 2 });
 
             const columns = [
                 { title: "N", width: 26, align: "center" },
-                { title: "Mahsulot nomi (xizmatlar)", width: 188 },
-                { title: "Katalog kodi va nomi", width: 118 },
-                { title: "O'lchov", width: 50, align: "center" },
+                { title: "Mahsulot nomi (xizmatlar)", width: 178 },
+                { title: "MXIK / katalog", width: 138 },
+                { title: "O'lchov", width: 48, align: "center" },
                 { title: "Miqdor", width: 50, align: "right" },
-                { title: "Narx", width: 76, align: "right" },
-                { title: "QQSsiz", width: 78, align: "right" },
-                { title: "QQS 12%", width: 68, align: "right" },
-                { title: "QQS bilan", width: 116, align: "right" }
+                { title: "Narx", width: 74, align: "right" },
+                { title: "QQSsiz", width: 76, align: "right" },
+                { title: "QQS 12%", width: 66, align: "right" },
+                { title: "QQS bilan", width: 114, align: "right" }
             ];
             const drawTableHeader = (target, headerY) => {
-                drawRect(target, tableX, headerY, tableWidth, 34, { fill: "#0f766e", color: "#0f766e" });
+                drawRect(target, tableX, headerY, tableWidth, 34, { fill: accent, color: accent });
                 let currentX = tableX;
                 columns.forEach(column => {
                     drawText(target, column.title, currentX + (column.align === "right" ? column.width - 6 : column.align === "center" ? column.width / 2 : 6), headerY + 20, { size: 7.4, bold: true, color: "#ffffff", align: column.align, maxChars: Math.max(8, Math.floor(column.width / 4)) });
@@ -816,12 +840,12 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 return rowY;
             };
 
-            drawTableRows(commands, rows.slice(0, 4), 0, drawTableHeader(commands, 326));
+            drawTableRows(commands, rows.slice(0, 4), 0, drawTableHeader(commands, 288));
 
             for (let start = 4; start < rows.length; start += 9) {
                 const pageCommands = [];
-                drawRect(pageCommands, 0, pageHeight - 64, pageWidth, 64, { fill: "#ecfeff", stroke: false });
-                drawText(pageCommands, `${title} - davom`, pageWidth / 2, 552, { size: 18, bold: true, align: "center", color: "#0f766e", maxChars: 70 });
+                drawRect(pageCommands, 0, pageHeight - 64, pageWidth, 64, { fill: headerFill, stroke: false });
+                drawText(pageCommands, `${title} - davom`, pageWidth / 2, 552, { size: 18, bold: true, align: "center", color: accentDark, maxChars: 70 });
                 drawText(pageCommands, `${date.display} dagi ${number}-sonli`, pageWidth / 2, 530, { size: 10, bold: true, align: "center", color: "#334155", maxChars: 90 });
                 const chunk = rows.slice(start, start + 9);
                 drawTableRows(pageCommands, chunk, start, drawTableHeader(pageCommands, 486));
@@ -836,8 +860,8 @@ const STORAGE_KEY = "myDillerUzStateV2";
             drawText(commands, money(totals.net), tableX + 750, totalsY + 52, { size: 8.5, align: "right" });
             drawText(commands, "QQS 12%:", tableX + 496, totalsY + 34, { size: 8.5, bold: true });
             drawText(commands, money(totals.vat), tableX + 750, totalsY + 34, { size: 8.5, align: "right" });
-            drawText(commands, "Jami to'lov uchun:", tableX + 496, totalsY + 14, { size: 9.5, bold: true, color: "#0f766e" });
-            drawText(commands, money(totals.total), tableX + 750, totalsY + 14, { size: 9.5, bold: true, align: "right", color: "#0f766e" });
+            drawText(commands, "Jami to'lov uchun:", tableX + 496, totalsY + 14, { size: 9.5, bold: true, color: accentDark });
+            drawText(commands, money(totals.total), tableX + 750, totalsY + 14, { size: 9.5, bold: true, align: "right", color: accentDark });
 
             drawText(commands, "Rahbar:", margin, 112, { size: 8.5, bold: true });
             drawLine(commands, margin + 48, 110, margin + 260, 110, "#94a3b8", 0.5);
@@ -897,11 +921,12 @@ const STORAGE_KEY = "myDillerUzStateV2";
 
             const columns = [
                 { title: "N", width: 30, align: "center" },
-                { title: "Mahsulot", width: 250 },
-                { title: "O'lchov", width: 70, align: "center" },
-                { title: "Miqdor", width: 70, align: "right" },
-                { title: "Narx", width: 110, align: "right" },
-                { title: "Jami", width: 120, align: "right" },
+                { title: "Mahsulot", width: 200 },
+                { title: "MXIK", width: 110 },
+                { title: "O'lchov", width: 55, align: "center" },
+                { title: "Miqdor", width: 55, align: "right" },
+                { title: "Narx", width: 95, align: "right" },
+                { title: "Jami", width: 105, align: "right" },
                 { title: "Izoh", width: 120 }
             ];
             const drawHeader = (target, headerY) => {
@@ -923,6 +948,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     const values = [
                         String(startIndex + index + 1),
                         row.name,
+                        row.mxikCode || "Kiritilmagan",
                         row.unit,
                         String(row.qty),
                         money(row.price),
@@ -942,8 +968,8 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 return rowY;
             };
 
-            drawRows(commands, rows.slice(0, 5), 0, drawHeader(commands, 348));
-            for (let start = 5; start < rows.length; start += 10) {
+            drawRows(commands, rows.slice(0, 4), 0, drawHeader(commands, 348));
+            for (let start = 4; start < rows.length; start += 10) {
                 const pageCommands = [];
                 drawRect(pageCommands, 0, pageHeight - 64, pageWidth, 64, { fill: "#eef2ff", stroke: false });
                 drawText(pageCommands, "Xaridor qabul dalolatnomasi - davom", pageWidth / 2, 552, { size: 18, bold: true, align: "center", color: "#3730a3", maxChars: 86 });
@@ -1980,12 +2006,12 @@ const STORAGE_KEY = "myDillerUzStateV2";
 
         function moderationTable(products) {
             return `<div class="table-responsive"><table>
-                <thead><tr><th>Mahsulot</th><th>Sotuvchi</th><th>SKU</th><th>Holat</th><th>Izoh</th><th>Amal</th></tr></thead>
+                <thead><tr><th>Mahsulot</th><th>Sotuvchi</th><th>Kodlar</th><th>Holat</th><th>Izoh</th><th>Amal</th></tr></thead>
                 <tbody>${products.map(product => `
                     <tr>
                         <td><b>${escapeHtml(product.name)}</b><div class="text-xs text-muted">${escapeHtml(categoryByValue(product.category).label)} · ${money(product.price)}</div></td>
                         <td>${escapeHtml(product.sellerName || userById(product.sellerId).name)}</td>
-                        <td>${escapeHtml(product.sku)}</td>
+                        <td><b>${escapeHtml(product.sku)}</b><div class="text-xs text-muted">MXIK: ${escapeHtml(product.mxikCode || product.mxik_code || "Kiritilmagan")}</div></td>
                         <td>${statusBadge(product.status)}</td>
                         <td class="text-sm text-muted">${escapeHtml(product.moderationNote || "")}</td>
                         <td><div class="flex gap-2">
@@ -2259,7 +2285,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function productMatches(product, filter) {
-            const haystack = normalize([product.name, product.sku, userById(product.sellerId).name, product.region].join(" "));
+            const haystack = normalize([product.name, product.sku, product.mxikCode, product.mxik_code, userById(product.sellerId).name, product.region].join(" "));
             return (!filter.search || haystack.includes(normalize(filter.search)))
                 && (!filter.category || filter.category === "all" || product.category === filter.category)
                 && (!filter.model || filter.model === "all" || product.model === filter.model)
@@ -2270,7 +2296,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             const f = STATE.filters[group];
             const includeSeller = group === "products" && STATE.currentUser.role !== "seller";
             return `<div class="filter-toolbar">
-                <div class="input-group" style="margin:0;"><label>Qidirish</label><div class="search-field"><i class="ri-search-line"></i><input class="input-control" value="${escapeHtml(f.search)}" oninput="setFilter('${group}','search',this.value)" placeholder="Mahsulot, SKU yoki sotuvchi"></div></div>
+                <div class="input-group" style="margin:0;"><label>Qidirish</label><div class="search-field"><i class="ri-search-line"></i><input class="input-control" value="${escapeHtml(f.search)}" oninput="setFilter('${group}','search',this.value)" placeholder="Mahsulot, SKU, MXIK yoki sotuvchi"></div></div>
                 <div class="input-group" style="margin:0;"><label>Kategoriya</label>${selectInline(f.category, categoryOptions(true), `setFilter('${group}','category',this.value)`)}</div>
                 <div class="input-group" style="margin:0;"><label>Model</label>${selectInline(f.model, [{ value: "all", label: "Barcha modellar" }, { value: "realization", label: "Realizatsiya" }, { value: "prepayment", label: "Oldindan to'lov" }], `setFilter('${group}','model',this.value)`)}</div>
                 ${includeSeller ? `<div class="input-group" style="margin:0;"><label>Sotuvchi</label>${selectInline(f.seller, sellerOptions(true), `setFilter('${group}','seller',this.value)`)}</div>` : ""}
@@ -2310,6 +2336,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                         <div class="product-price">${money(product.price)}</div>
                         <div class="specs">
                             <span><i class="ri-store-2-line"></i>${escapeHtml(sellerName)}</span>
+                            <span><i class="ri-barcode-box-line"></i>MXIK: ${escapeHtml(product.mxikCode || product.mxik_code || "Kiritilmagan")}</span>
                             <span><i class="ri-map-pin-line"></i>${escapeHtml(product.region || "Tanlanmagan")}</span>
                             <span><i class="ri-refresh-line"></i>${tradeLabel}</span>
                             <span><i class="ri-calendar-check-line"></i>Realizatsiya: ${realDays} kun</span>
@@ -2383,6 +2410,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             modal(product ? "Mahsulotni tahrirlash" : "Yangi mahsulot", `
                 ${product?.sku ? `<div class="input-group"><label>SKU</label><input class="input-control" value="${escapeHtml(product.sku)}" disabled></div>` : `<div class="text-sm text-muted mb-4"><i class="ri-barcode-line"></i> SKU avtomatik yaratiladi: RDP-001, RDP-002...</div>`}
                 <div class="input-group"><label>Mahsulot nomi</label><input id="p-name" class="input-control" value="${escapeHtml(product?.name || "")}" placeholder="Nom"></div>
+                <div class="input-group"><label>MXIK kodi</label><input id="p-mxik-code" class="input-control" inputmode="numeric" maxlength="32" value="${escapeHtml(product?.mxikCode || product?.mxik_code || "")}" placeholder="Masalan: 09800001009000000" oninput="this.value=mxikDigits(this.value)"><div class="text-xs text-muted">Hisob-faktura va to'lov PDFlarida ko'rsatiladigan mahsulot identifikatsiya kodi.</div></div>
                 <div class="grid-2">
                     <div class="input-group"><label>Kategoriya</label>${selectInline(categoryValue, categoryOptions(false), "")}</div>
                     <div class="input-group"><label>Yangi kategoriya</label><div class="flex gap-2"><input id="new-category" class="input-control" placeholder="Kategoriya qo'shish"><button class="btn btn-outline" onclick="addCategoryFromForm()">Qo'shish</button></div></div>
@@ -2450,6 +2478,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         async function saveProductForm() {
             const name = document.getElementById("p-name").value.trim();
             const price = Number(document.getElementById("p-price").value);
+            const mxikCode = mxikDigits(document.getElementById("p-mxik-code").value);
             const category = document.getElementById("p-category").value;
             const region = document.getElementById("p-region").value;
             const model = document.getElementById("p-model").value;
@@ -2458,6 +2487,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
             const photoDays = Number(document.getElementById("p-photo-days").value);
             if (!name || !price || price <= 0) {
                 showToast("Mahsulot nomi va narxni to'g'ri kiriting", "warning");
+                return;
+            }
+            if (!mxikCode || mxikCode.length < 5) {
+                showToast("MXIK kodini to'g'ri kiriting", "warning");
                 return;
             }
             if (model === "prepayment" && (!prepayPercent || prepayPercent <= 0 || prepayPercent > 100)) {
@@ -2472,6 +2505,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             const file = document.getElementById("p-image-file").files[0];
             const formData = new FormData();
             formData.append("name", name);
+            formData.append("mxik_code", mxikCode);
             formData.append("price", price);
             formData.append("category", category);
             formData.append("region", region);
@@ -2626,7 +2660,9 @@ const STORAGE_KEY = "myDillerUzStateV2";
             if (!order) return;
             const items = (order.items || []).map(item => {
                 const product = productById(item.prodId) || { name: "O'chirilgan mahsulot", price: 0 };
-                return `<div class="details-row"><span class="details-label">${escapeHtml(product.name)} x ${item.qty}</span><span class="details-value">${money(product.price * item.qty)}</span></div>`;
+                const mxikCode = item.mxikCode || item.mxik_code || product.mxikCode || product.mxik_code || "Kiritilmagan";
+                const lineTotal = Number(item.price || product.price || 0) * Number(item.qty || 0);
+                return `<div class="details-row"><span class="details-label">${escapeHtml(product.name)} x ${item.qty}<div class="text-xs text-muted">MXIK: ${escapeHtml(mxikCode)}</div></span><span class="details-value">${money(lineTotal)}</span></div>`;
             }).join("") || `<div class="text-sm text-muted">Mahsulotlar ro'yxati topilmadi</div>`;
             const actions = orderActions(order);
             const orderContract = orderContractById(order.id);
@@ -2664,6 +2700,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 if (order.status === "product_ready") return `<div class="flex gap-2" style="flex-wrap:wrap;">${sellerInvoiceButton(order, "Hisob-faktura") || ""}<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','dispatched')"><i class="ri-truck-line"></i> Yetkazishga berildi</button></div>`;
                 if (order.status === "invoice_generated") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','dispatched')"><i class="ri-truck-line"></i> Yetkazishga berildi</button>`;
                 if (order.status === "dispatched") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','delivered')">Yetkazildi</button>`;
+                if (order.status === "buyer_accepted") return `<div class="flex gap-2" style="flex-wrap:wrap;">${countdownHtml("Xaridor to'lovi", buyerPaymentDeadline(order), "warning")}${sellerInvoiceButton(order, "Hisob-faktura")}${buyerAcceptanceButton(order, "Qabul PDF")}</div>`;
                 if (order.status === "buyer_paid") return `<button class="btn btn-success" onclick="updateOrderStatus('${order.id}','trade_closed')">To'lovni qabul qildim</button>`;
                 if (order.status === "trade_closed") {
                     return `<button class="btn btn-primary" onclick="openPaymentModal('${order.id}', 'admin')">To'lash (Komissiya)</button>`;
@@ -2992,5 +3029,13 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 if (!event.target.closest(".profile-wrapper")) document.getElementById("profile-dropdown")?.classList.remove("open");
             });
             setInterval(updateCountdownElements, 60000);
+            setInterval(async () => {
+                if (PAGE_TYPE !== "dashboard" || !STATE.currentUser) return;
+                await refreshDB();
+                if (!document.getElementById("main-modal")?.classList.contains("active")) {
+                    renderCurrentView();
+                }
+                updateCountdownElements();
+            }, 45000);
             initApp();
         });

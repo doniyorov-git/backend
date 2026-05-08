@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS products (
     seller_id VARCHAR(50) NOT NULL,
     name VARCHAR(255) NOT NULL,
     sku VARCHAR(50),
+    mxik_code VARCHAR(32),
     category VARCHAR(100),
     price DECIMAL(15,2) NOT NULL,
     unit VARCHAR(20),
