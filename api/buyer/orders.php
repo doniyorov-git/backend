@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             sendJson(['success' => false, 'message' => 'Missing parameters'], 400);
         }
 
-        $stmt = $pdo->prepare("SELECT buyer_payment_proof FROM orders WHERE id = ? AND buyer_id = ?");
+        $stmt = $pdo->prepare("SELECT buyer_payment_proof, buyer_payment_due_at FROM orders WHERE id = ? AND buyer_id = ?");
         $stmt->execute([$data['id'], $buyerId]);
         $existingOrder = $stmt->fetch();
         if (!$existingOrder) {
@@ -94,6 +94,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if ($paymentProof) {
             $stmt = $pdo->prepare("UPDATE orders SET status = ?, buyer_payment_proof = ? WHERE id = ? AND buyer_id = ?");
             $stmt->execute([$data['status'], $paymentProof, $data['id'], $buyerId]);
+        } elseif ($data['status'] === 'buyer_accepted') {
+            $stmt = $pdo->prepare("UPDATE orders SET status = ?, buyer_payment_due_at = COALESCE(buyer_payment_due_at, DATE_ADD(NOW(), INTERVAL 10 DAY)) WHERE id = ? AND buyer_id = ?");
+            $stmt->execute([$data['status'], $data['id'], $buyerId]);
         } else {
             $stmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ? AND buyer_id = ?");
             $stmt->execute([$data['status'], $data['id'], $buyerId]);
@@ -109,6 +112,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $sellerId = $stmt->fetchColumn();
         if ($sellerId) {
             createNotification($pdo, $sellerId, 'Buyurtma holati yangilandi', '#' . $data['id'] . ' buyurtma holati: ' . $data['status'], 'info', 'seller-orders');
+            if ($data['status'] === 'buyer_accepted') {
+                createNotification($pdo, $sellerId, 'Xaridor mahsulotni qabul qildi', '#' . $data['id'] . ' buyurtma bo\'yicha 10 kunlik to\'lov muddati boshlandi.', 'success', 'seller-orders');
+            } elseif ($data['status'] === 'buyer_paid') {
+                createNotification($pdo, $sellerId, 'Xaridor to\'lov tasdig\'ini yubordi', '#' . $data['id'] . ' buyurtma to\'lovi tekshiruvni kutmoqda.', 'warning', 'seller-orders');
+            }
         }
         
         sendJson(['success' => true]);
