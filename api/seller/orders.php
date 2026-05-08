@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $stmt->execute([$status, $commissionProof, $orderId, $sellerId]);
         notifyRole($pdo, 'admin', 'Komissiya tasdiq kutmoqda', '#' . $orderId . ' buyurtma komissiyasi tekshiruvga yuborildi.', 'warning', 'admin-comm');
     } else {
-        if ($status === 'invoice_generated') {
+        if ($status === 'product_ready' || $status === 'invoice_generated') {
             $stmt = $pdo->prepare("UPDATE orders SET status = ?, invoice_generated_at = COALESCE(invoice_generated_at, NOW()), buyer_payment_due_at = COALESCE(buyer_payment_due_at, DATE_ADD(NOW(), INTERVAL 10 DAY)) WHERE id = ? AND seller_id = ?");
             $stmt->execute([$status, $orderId, $sellerId]);
         } elseif ($status === 'trade_closed') {
@@ -87,9 +87,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $stmt->execute([$orderId, $sellerId]);
     $buyerId = $stmt->fetchColumn();
     if ($buyerId) {
-        createNotification($pdo, $buyerId, 'Buyurtma holati yangilandi', '#' . $orderId . ' buyurtma holati: ' . $status, 'info', 'buyer-orders');
-        if ($status === 'invoice_generated') {
+        if ($status === 'product_ready') {
+            createNotification($pdo, $buyerId, 'Mahsulot tayyor', '#' . $orderId . ' buyurtma mahsuloti tayyor. Hisob-faktura kabinetda ochildi, to\'lov muddati: 10 kun.', 'warning', 'buyer-orders');
+        } elseif ($status === 'invoice_generated') {
             createNotification($pdo, $buyerId, 'Hisob-faktura yaratildi', '#' . $orderId . ' buyurtma uchun hisob-faktura yaratildi. To\'lov muddati: 10 kun.', 'warning', 'buyer-orders');
+        } else {
+            createNotification($pdo, $buyerId, 'Buyurtma holati yangilandi', '#' . $orderId . ' buyurtma holati: ' . $status, 'info', 'buyer-orders');
         }
     }
     

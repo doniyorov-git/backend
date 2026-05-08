@@ -369,6 +369,23 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return order.commissionDueAt || formatDateTimeForAttr(addDaysToDate(order.updatedAt || order.createdAt || order.date, COMMISSION_PAYMENT_DAYS));
         }
 
+        function orderFlowIndex(status) {
+            return ORDER_FLOW.findIndex(item => item.value === status);
+        }
+
+        function isBuyerInvoiceAvailable(order) {
+            if (!order) return false;
+            const currentIndex = orderFlowIndex(order.status);
+            return Boolean(order.invoiceGeneratedAt) || (currentIndex >= orderFlowIndex("product_ready"));
+        }
+
+        function isBuyerPaymentActionAvailable(order) {
+            if (!isBuyerInvoiceAvailable(order)) return false;
+            const currentIndex = orderFlowIndex(order.status);
+            const paidIndex = orderFlowIndex("buyer_paid");
+            return currentIndex >= orderFlowIndex("product_ready") && (paidIndex < 0 || currentIndex < paidIndex);
+        }
+
         function formatContractPurposeDate(value) {
             const raw = String(value || "").trim();
             const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -570,6 +587,19 @@ const STORAGE_KEY = "myDillerUzStateV2";
             if (options.stroke !== false) commands.push(`${pdfColor(options.color || "#d1d5db")} RG ${(options.lineWidth || 0.6)} w ${x.toFixed(2)} ${y.toFixed(2)} ${width.toFixed(2)} ${height.toFixed(2)} re S`);
         }
 
+        function drawInfoTable(commands, rows, x, topY, width, options = {}) {
+            const labelWidth = options.labelWidth || 108;
+            const rowHeight = options.rowHeight || 28;
+            rows.forEach((row, index) => {
+                const y = topY - ((index + 1) * rowHeight);
+                drawRect(commands, x, y, width, rowHeight, { fill: index % 2 ? "#ffffff" : "#f8fafc", color: "#cbd5e1", lineWidth: 0.45 });
+                drawRect(commands, x, y, labelWidth, rowHeight, { fill: "#e0f2fe", color: "#cbd5e1", lineWidth: 0.45 });
+                drawText(commands, row.label, x + 8, y + rowHeight - 12, { size: 7.6, bold: true, color: "#075985", maxChars: Math.max(12, Math.floor(labelWidth / 4.5)) });
+                drawText(commands, row.value, x + labelWidth + 8, y + rowHeight - 12, { size: 7.6, color: "#334155", maxChars: Math.max(20, Math.floor((width - labelWidth - 14) / 4.2)), maxLines: 2 });
+            });
+            return topY - (rows.length * rowHeight);
+        }
+
         function createPdfBlobFromPages(pages, pageWidth = 842, pageHeight = 595) {
             const font1Id = 3 + pages.length * 2;
             const font2Id = font1Id + 1;
@@ -631,13 +661,21 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function drawInvoiceParty(commands, label, party, x, y, width) {
-            drawRect(commands, x, y - 86, width, 86, { fill: "#f8fafc", color: "#cbd5e1" });
-            drawRect(commands, x, y - 18, width, 18, { fill: "#0d9488", color: "#0d9488" });
-            drawText(commands, label, x + 10, y - 13, { size: 9, bold: true, color: "#ffffff", maxChars: 42 });
-            drawText(commands, `Nomi: ${legalPartyName(party?.name, party?.role === "platform" ? "MCHJ" : "XK")}`, x + 10, y - 32, { size: 8.2, bold: true, maxChars: 54 });
-            drawText(commands, `STIR: ${partyRequisite(party, "inn")}`, x + 10, y - 46, { size: 8.2, maxChars: 54 });
-            drawText(commands, `H/r: ${partyRequisite(party, "bankAccount")}`, x + 10, y - 60, { size: 8.2, maxChars: 54 });
-            drawText(commands, `MFO: ${partyRequisite(party, "bankMfo")}`, x + 10, y - 74, { size: 8.2, maxChars: 54 });
+            const rows = [
+                { label: "Nomi", value: legalPartyName(party?.name, party?.role === "platform" ? "MCHJ" : "XK") },
+                { label: "STIR", value: partyRequisite(party, "inn") },
+                { label: "H/r", value: partyRequisite(party, "bankAccount") },
+                { label: "MFO", value: partyRequisite(party, "bankMfo") }
+            ];
+            drawRect(commands, x, y - 86, width, 86, { fill: "#ffffff", color: "#cbd5e1" });
+            drawRect(commands, x, y - 20, width, 20, { fill: "#0f766e", color: "#0f766e" });
+            drawText(commands, label, x + 10, y - 14, { size: 9, bold: true, color: "#ffffff", maxChars: 42 });
+            rows.forEach((row, index) => {
+                const rowY = y - 20 - ((index + 1) * 16.5);
+                drawRect(commands, x, rowY, width, 16.5, { fill: index % 2 ? "#ffffff" : "#f8fafc", color: "#e2e8f0", lineWidth: 0.3 });
+                drawText(commands, row.label, x + 8, rowY + 5.5, { size: 7.2, bold: true, color: "#475569", maxChars: 10 });
+                drawText(commands, row.value, x + 56, rowY + 5.5, { size: 7.4, color: "#111827", maxChars: Math.max(28, Math.floor((width - 64) / 4.1)) });
+            });
         }
 
         function orderItemLines(order) {
@@ -710,15 +748,15 @@ const STORAGE_KEY = "myDillerUzStateV2";
             const tableWidth = pageWidth - margin * 2;
             const title = type === "admin" ? "Komissiya hisobvaraq-faktura" : "Hisobvaraq-faktura";
 
-            drawRect(commands, 0, pageHeight - 78, pageWidth, 78, { fill: "#ecfeff", stroke: false });
-            drawText(commands, title, pageWidth / 2, 552, { size: 20, bold: true, align: "center", color: "#0f766e", maxChars: 70 });
-            drawText(commands, `${date.display} dagi ${number}-sonli`, pageWidth / 2, 530, { size: 10, bold: true, align: "center", color: "#334155", maxChars: 90 });
-            drawText(commands, contractReferenceText(contract, order.createdAt || order.date), pageWidth / 2, 512, { size: 9, align: "center", color: "#475569", maxChars: 110 });
+            drawRect(commands, 0, pageHeight - 92, pageWidth, 92, { fill: "#0f172a", stroke: false });
+            drawRect(commands, 0, pageHeight - 92, 12, 92, { fill: "#14b8a6", stroke: false });
+            drawText(commands, title, pageWidth / 2, 552, { size: 21, bold: true, align: "center", color: "#ffffff", maxChars: 70 });
+            drawText(commands, `${date.display} dagi ${number}-sonli`, pageWidth / 2, 529, { size: 10, bold: true, align: "center", color: "#ccfbf1", maxChars: 90 });
+            drawText(commands, contractReferenceText(contract, order.createdAt || order.date), pageWidth / 2, 511, { size: 8.8, align: "center", color: "#cbd5e1", maxChars: 110 });
 
             drawInvoiceParty(commands, "Yetkazib beruvchi", supplier, margin, 488, 370);
             drawInvoiceParty(commands, "Sotib oluvchi", customer, margin + 400, 488, 370);
 
-            drawText(commands, "To'lov maqsadi", margin, 382, { size: 9, bold: true, color: "#0f766e" });
             const purpose = paymentPurposeText({
                 contract,
                 fallbackDate: order.createdAt || order.date,
@@ -726,7 +764,9 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 defaultSuffix: type === "admin" ? "MCHJ" : "XK",
                 serviceText: type === "admin" ? "platforma xizmatlari uchun to'lov" : "yetkazib berilgan mahsulotlar uchun to'lov"
             });
-            drawText(commands, purpose, margin + 86, 382, { size: 8.3, maxChars: 118, color: "#475569", maxLines: 2 });
+            drawInfoTable(commands, [
+                { label: "To'lov maqsadi", value: purpose }
+            ], margin, 394, tableWidth, { labelWidth: 112, rowHeight: 28 });
 
             const columns = [
                 { title: "N", width: 26, align: "center" },
@@ -779,13 +819,14 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 return rowY;
             };
 
-            drawTableRows(commands, rows.slice(0, 4), 0, drawTableHeader(commands, 338));
+            drawTableRows(commands, rows.slice(0, 3), 0, drawTableHeader(commands, 326));
 
-            for (let start = 4; start < rows.length; start += 9) {
+            for (let start = 3; start < rows.length; start += 9) {
                 const pageCommands = [];
-                drawRect(pageCommands, 0, pageHeight - 64, pageWidth, 64, { fill: "#ecfeff", stroke: false });
-                drawText(pageCommands, `${title} - davom`, pageWidth / 2, 552, { size: 18, bold: true, align: "center", color: "#0f766e", maxChars: 70 });
-                drawText(pageCommands, `${date.display} dagi ${number}-sonli`, pageWidth / 2, 530, { size: 10, bold: true, align: "center", color: "#334155", maxChars: 90 });
+                drawRect(pageCommands, 0, pageHeight - 70, pageWidth, 70, { fill: "#0f172a", stroke: false });
+                drawRect(pageCommands, 0, pageHeight - 70, 12, 70, { fill: "#14b8a6", stroke: false });
+                drawText(pageCommands, `${title} - davom`, pageWidth / 2, 552, { size: 18, bold: true, align: "center", color: "#ffffff", maxChars: 70 });
+                drawText(pageCommands, `${date.display} dagi ${number}-sonli`, pageWidth / 2, 530, { size: 10, bold: true, align: "center", color: "#ccfbf1", maxChars: 90 });
                 const chunk = rows.slice(start, start + 9);
                 drawTableRows(pageCommands, chunk, start, drawTableHeader(pageCommands, 486));
                 drawText(pageCommands, `Hujjat ID: ${number}`, margin, 42, { size: 7.8, color: "#64748b" });
@@ -840,6 +881,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function downloadPaymentInvoice(orderId, type) {
             const order = DB.orders.find(item => item.id === orderId);
             if (!order) return;
+            if (type === "seller" && STATE.currentUser?.role === "buyer" && !isBuyerInvoiceAvailable(order)) {
+                showToast("Hisob-faktura mahsulot tayyor bo'lgandan keyin ko'rinadi", "warning");
+                return;
+            }
             const name = type === "admin" ? `commission-invoice-${order.id}.pdf` : `invoice-${order.id}.pdf`;
             downloadBlob(invoiceBlobFor(order, type), name);
         }
@@ -1965,7 +2010,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return DB.orders.filter(order => {
                 if (role === "admin") return true;
                 if (role === "seller") return order.sellerId === STATE.currentUser.id;
-                if (role === "buyer") return order.buyerId === STATE.currentUser.id;
+                if (role === "buyer") return order.buyerId === STATE.currentUser.id && isBuyerInvoiceAvailable(order);
                 return false;
             });
         }
@@ -2153,7 +2198,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function orderDeadlineHtml(order) {
-            if (order.status === "invoice_generated") {
+            if (isBuyerPaymentActionAvailable(order)) {
                 return countdownHtml("Xaridor to'lovi", buyerPaymentDeadline(order), "warning");
             }
             if (order.status === "trade_closed") {
@@ -2446,6 +2491,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             const actions = orderActions(order);
             const orderContract = orderContractById(order.id);
             const deadlineInfo = orderDeadlineHtml(order);
+            const canViewSellerInvoice = STATE.currentUser.role !== "buyer" || isBuyerInvoiceAvailable(order);
             modal(`Buyurtma #${order.id}`, `
                 <div class="details-list mb-4">
                     <div class="details-row"><span class="details-label">Sotuvchi:</span><span class="details-value">${escapeHtml(userById(order.sellerId).name)}</span></div>
@@ -2462,7 +2508,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 <h4 class="mb-2">Mahsulotlar</h4>
                 <div class="details-list">${items}</div>
                 <div class="mt-4 flex gap-2" style="flex-wrap:wrap;">
-                    <button class="btn btn-outline" onclick="downloadPaymentInvoice('${order.id}', 'seller')"><i class="ri-file-pdf-line"></i> Hisob-fakturani yuklab olish</button>
+                    ${canViewSellerInvoice ? `<button class="btn btn-outline" onclick="downloadPaymentInvoice('${order.id}', 'seller')"><i class="ri-file-pdf-line"></i> Hisob-fakturani yuklab olish</button>` : `<span class="text-xs text-muted">Hisob-faktura mahsulot tayyor bo'lgandan keyin ko'rinadi</span>`}
                     ${paymentProofLink(order.buyerPaymentProof, "Xaridor to'lov tasdig'i")}
                     ${paymentProofLink(order.sellerCommissionProof, "Komissiya to'lov tasdig'i")}
                 </div>
@@ -2474,7 +2520,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             if (STATE.currentUser.role === "seller" && order.sellerId === STATE.currentUser.id) {
                 if (order.status === "pending_seller_accept") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','seller_accepted')">Qabul qildim</button>`;
                 if (order.status === "seller_accepted") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','product_ready')"><i class="ri-checkbox-circle-line"></i> Mahsulot tayyor</button>`;
-                if (order.status === "product_ready") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','invoice_generated')"><i class="ri-file-pdf-line"></i> Hisob-faktura generatsiya qilish</button>`;
+                if (order.status === "product_ready") return `<span class="text-sm text-muted">Hisob-faktura xaridorga yuborildi, to'lov kutilmoqda</span>`;
                 if (order.status === "invoice_generated") return `<span class="text-sm text-muted">Xaridor to'lovi kutilmoqda</span>`;
                 if (order.status === "dispatched") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','delivered')">Yetkazildi</button>`;
                 if (order.status === "buyer_paid") return `<button class="btn btn-success" onclick="updateOrderStatus('${order.id}','trade_closed')">To'lovni qabul qildim</button>`;
@@ -2483,15 +2529,14 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 }
             }
             if (STATE.currentUser.role === "buyer" && order.buyerId === STATE.currentUser.id) {
-                if (order.status === "invoice_generated") {
-                    return `<button class="btn btn-primary" onclick="openPaymentModal('${order.id}', 'seller')"><i class="ri-bank-card-line"></i> 10 kun ichida to'lash</button>`;
+                const buttons = [];
+                if (isBuyerPaymentActionAvailable(order)) {
+                    buttons.push(`<button class="btn btn-primary" onclick="openPaymentModal('${order.id}', 'seller')"><i class="ri-bank-card-line"></i> 10 kun ichida to'lash</button>`);
                 }
                 if (order.status === "delivered") {
-                    return `<button class="btn btn-success" onclick="updateOrderStatus('${order.id}','buyer_accepted')">Qabul qildim (Mahsulotni)</button>`;
+                    buttons.push(`<button class="btn btn-success" onclick="updateOrderStatus('${order.id}','buyer_accepted')">Qabul qildim (Mahsulotni)</button>`);
                 }
-                if (order.status === "buyer_accepted") {
-                    return `<button class="btn btn-primary" onclick="openPaymentModal('${order.id}', 'seller')">To'lov qilish</button>`;
-                }
+                if (buttons.length) return buttons.join("");
             }
             if (STATE.currentUser.role === "admin" && order.status === "seller_paid_comm") {
                 return `<button class="btn btn-success" onclick="confirmCommPayment('${order.id}')">Komissiyani qabul qildim (Yakunlash)</button>`;
@@ -2502,6 +2547,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function openPaymentModal(orderId, type) {
             const order = DB.orders.find(item => item.id === orderId);
             if (!order) return;
+            if (type === "seller" && STATE.currentUser?.role === "buyer" && !isBuyerInvoiceAvailable(order)) {
+                showToast("Hisob-faktura mahsulot tayyor bo'lgandan keyin ko'rinadi", "warning");
+                return;
+            }
             const blob = invoiceBlobFor(order, type);
             const previewUrl = URL.createObjectURL(blob);
 
