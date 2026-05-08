@@ -570,16 +570,23 @@ const STORAGE_KEY = "myDillerUzStateV2";
             if (options.stroke !== false) commands.push(`${pdfColor(options.color || "#d1d5db")} RG ${(options.lineWidth || 0.6)} w ${x.toFixed(2)} ${y.toFixed(2)} ${width.toFixed(2)} ${height.toFixed(2)} re S`);
         }
 
-        function createPdfBlobFromCommands(commands, pageWidth = 842, pageHeight = 595) {
-            const stream = commands.join("\n");
+        function createPdfBlobFromPages(pages, pageWidth = 842, pageHeight = 595) {
+            const font1Id = 3 + pages.length * 2;
+            const font2Id = font1Id + 1;
+            const pageIds = pages.map((_, index) => 3 + index * 2);
             const objects = [
                 "<< /Type /Catalog /Pages 2 0 R >>",
-                "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-                `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>`,
-                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
-                `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`
+                `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`
             ];
+            pages.forEach((commands, index) => {
+                const stream = commands.join("\n");
+                const pageId = 3 + index * 2;
+                const contentId = pageId + 1;
+                objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 ${font1Id} 0 R /F2 ${font2Id} 0 R >> >> /Contents ${contentId} 0 R >>`);
+                objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+            });
+            objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+            objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>");
             let pdf = "%PDF-1.4\n";
             const offsets = [0];
             objects.forEach((object, index) => {
@@ -593,6 +600,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
             }
             pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
             return new Blob([pdf], { type: "application/pdf" });
+        }
+
+        function createPdfBlobFromCommands(commands, pageWidth = 842, pageHeight = 595) {
+            return createPdfBlobFromPages([commands], pageWidth, pageHeight);
         }
 
         function invoiceDateParts(value) {
@@ -691,6 +702,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             const rows = invoiceRows(order, type);
             const totals = invoiceTotals(rows.reduce((sum, row) => sum + row.total, 0));
             const commands = [];
+            const pages = [commands];
             const pageWidth = 842;
             const pageHeight = 595;
             const margin = 36;
@@ -727,44 +739,58 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 { title: "QQS 12%", width: 68, align: "right" },
                 { title: "QQS bilan", width: 116, align: "right" }
             ];
-            let y = 338;
-            drawRect(commands, tableX, y, tableWidth, 34, { fill: "#0f766e", color: "#0f766e" });
-            let x = tableX;
-            columns.forEach(column => {
-                drawText(commands, column.title, x + (column.align === "right" ? column.width - 6 : column.align === "center" ? column.width / 2 : 6), y + 20, { size: 7.4, bold: true, color: "#ffffff", align: column.align, maxChars: Math.max(8, Math.floor(column.width / 4)) });
-                drawLine(commands, x, y, x, y + 34, "#ffffff", 0.35);
-                x += column.width;
-            });
-            drawLine(commands, tableX + tableWidth, y, tableX + tableWidth, y + 34, "#ffffff", 0.35);
-            y -= 42;
-
-            rows.slice(0, 4).forEach((row, index) => {
-                const rowHeight = 42;
-                drawRect(commands, tableX, y, tableWidth, rowHeight, { fill: index % 2 ? "#ffffff" : "#f8fafc", color: "#dbe4ee" });
-                x = tableX;
-                const values = [
-                    String(index + 1),
-                    row.name,
-                    row.catalog,
-                    row.unit,
-                    String(row.qty),
-                    money(row.price),
-                    money(row.net),
-                    money(row.vat),
-                    money(row.total)
-                ];
-                columns.forEach((column, colIndex) => {
-                    const textX = x + (column.align === "right" ? column.width - 6 : column.align === "center" ? column.width / 2 : 6);
-                    drawText(commands, values[colIndex], textX, y + rowHeight - 14, { size: 7.2, bold: colIndex === 1, align: column.align, maxChars: Math.max(8, Math.floor(column.width / 4.4)), maxLines: 2, color: "#111827" });
-                    drawLine(commands, x, y, x, y + rowHeight, "#dbe4ee", 0.35);
-                    x += column.width;
+            const drawTableHeader = (target, headerY) => {
+                drawRect(target, tableX, headerY, tableWidth, 34, { fill: "#0f766e", color: "#0f766e" });
+                let currentX = tableX;
+                columns.forEach(column => {
+                    drawText(target, column.title, currentX + (column.align === "right" ? column.width - 6 : column.align === "center" ? column.width / 2 : 6), headerY + 20, { size: 7.4, bold: true, color: "#ffffff", align: column.align, maxChars: Math.max(8, Math.floor(column.width / 4)) });
+                    drawLine(target, currentX, headerY, currentX, headerY + 34, "#ffffff", 0.35);
+                    currentX += column.width;
                 });
-                drawLine(commands, tableX + tableWidth, y, tableX + tableWidth, y + rowHeight, "#dbe4ee", 0.35);
-                y -= rowHeight;
-            });
+                drawLine(target, tableX + tableWidth, headerY, tableX + tableWidth, headerY + 34, "#ffffff", 0.35);
+                return headerY - 42;
+            };
+            const drawTableRows = (target, rowList, startIndex, startY) => {
+                let rowY = startY;
+                rowList.forEach((row, index) => {
+                    const rowHeight = 42;
+                    drawRect(target, tableX, rowY, tableWidth, rowHeight, { fill: index % 2 ? "#ffffff" : "#f8fafc", color: "#dbe4ee" });
+                    let currentX = tableX;
+                    const values = [
+                        String(startIndex + index + 1),
+                        row.name,
+                        row.catalog,
+                        row.unit,
+                        String(row.qty),
+                        money(row.price),
+                        money(row.net),
+                        money(row.vat),
+                        money(row.total)
+                    ];
+                    columns.forEach((column, colIndex) => {
+                        const textX = currentX + (column.align === "right" ? column.width - 6 : column.align === "center" ? column.width / 2 : 6);
+                        drawText(target, values[colIndex], textX, rowY + rowHeight - 14, { size: 7.2, bold: colIndex === 1, align: column.align, maxChars: Math.max(8, Math.floor(column.width / 4.4)), maxLines: 2, color: "#111827" });
+                        drawLine(target, currentX, rowY, currentX, rowY + rowHeight, "#dbe4ee", 0.35);
+                        currentX += column.width;
+                    });
+                    drawLine(target, tableX + tableWidth, rowY, tableX + tableWidth, rowY + rowHeight, "#dbe4ee", 0.35);
+                    rowY -= rowHeight;
+                });
+                return rowY;
+            };
 
-            if (rows.length > 4) {
-                drawText(commands, `Yana ${rows.length - 4} ta qator tizimda mavjud. PDF qisqa shaklda chiqarildi.`, tableX + 6, y + 20, { size: 7.4, color: "#64748b", maxChars: 100 });
+            drawTableRows(commands, rows.slice(0, 4), 0, drawTableHeader(commands, 338));
+
+            for (let start = 4; start < rows.length; start += 9) {
+                const pageCommands = [];
+                drawRect(pageCommands, 0, pageHeight - 64, pageWidth, 64, { fill: "#ecfeff", stroke: false });
+                drawText(pageCommands, `${title} - davom`, pageWidth / 2, 552, { size: 18, bold: true, align: "center", color: "#0f766e", maxChars: 70 });
+                drawText(pageCommands, `${date.display} dagi ${number}-sonli`, pageWidth / 2, 530, { size: 10, bold: true, align: "center", color: "#334155", maxChars: 90 });
+                const chunk = rows.slice(start, start + 9);
+                drawTableRows(pageCommands, chunk, start, drawTableHeader(pageCommands, 486));
+                drawText(pageCommands, `Hujjat ID: ${number}`, margin, 42, { size: 7.8, color: "#64748b" });
+                drawText(pageCommands, `${Math.floor(start / 9) + 2}-sahifa`, pageWidth - margin, 42, { size: 7.8, align: "right", color: "#64748b" });
+                pages.push(pageCommands);
             }
 
             const totalsY = 78;
@@ -785,7 +811,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             drawText(commands, `Hujjat ID: ${number}`, margin, 42, { size: 7.8, color: "#64748b" });
             drawText(commands, "Elektron shaklda generatsiya qilindi", pageWidth - margin, 42, { size: 7.8, align: "right", color: "#64748b" });
 
-            return createPdfBlobFromCommands(commands, pageWidth, pageHeight);
+            return createPdfBlobFromPages(pages, pageWidth, pageHeight);
         }
 
         function sellerPaymentInvoiceBlob(order) {
