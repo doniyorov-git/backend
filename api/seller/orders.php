@@ -29,27 +29,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     sendJson(['success' => true, 'data' => $orders]);
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Handle status update and file upload
-    $orderId = $_POST['id'] ?? null;
-    $status = $_POST['status'] ?? null;
-    
-    if (!$orderId || !$status) {
-        $data = json_decode(file_get_contents('php://input'), true);
-        $orderId = $data['id'] ?? null;
-        $status = $data['status'] ?? null;
-    }
+    $data = !empty($_POST) ? $_POST : (json_decode(file_get_contents('php://input'), true) ?: []);
+    $orderId = $data['id'] ?? null;
+    $status = $data['status'] ?? null;
 
     if (!$orderId || !$status) {
         sendJson(['success' => false, 'message' => 'Missing parameters'], 400);
+    }
+
+    $stmt = $pdo->prepare("SELECT seller_commission_proof FROM orders WHERE id = ? AND seller_id = ?");
+    $stmt->execute([$orderId, $sellerId]);
+    $existingOrder = $stmt->fetch();
+    if (!$existingOrder) {
+        sendJson(['success' => false, 'message' => 'Buyurtma topilmadi'], 404);
     }
     
     $dispatchReport = null;
     if ($status === 'dispatched' && isset($_FILES['dispatch_report']) && $_FILES['dispatch_report']['error'] === UPLOAD_ERR_OK) {
         $dispatchReport = saveUploadedFile('dispatch_report', 'reports', 'rep');
     }
+
+    $commissionProof = '';
+    if ($status === 'seller_paid_comm') {
+        $commissionProof = saveUploadedDocument('commission_payment_proof', 'payments', 'seller_comm');
+        if (!$commissionProof && empty($existingOrder['seller_commission_proof'])) {
+            sendJson(['success' => false, 'message' => 'Komissiya to\'lovini tasdiqlovchi PDF hujjatni yuklang'], 400);
+        }
+    }
     
     if ($dispatchReport) {
         $stmt = $pdo->prepare("UPDATE orders SET status = ?, dispatch_report = ? WHERE id = ? AND seller_id = ?");
         $stmt->execute([$status, $dispatchReport, $orderId, $sellerId]);
+    } else if ($commissionProof) {
+        $stmt = $pdo->prepare("UPDATE orders SET status = ?, seller_commission_proof = ?, comm_status = 'pending_admin' WHERE id = ? AND seller_id = ?");
+        $stmt->execute([$status, $commissionProof, $orderId, $sellerId]);
+        notifyRole($pdo, 'admin', 'Komissiya tasdiq kutmoqda', '#' . $orderId . ' buyurtma komissiyasi tekshiruvga yuborildi.', 'warning', 'admin-comm');
     } else {
         $stmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ? AND seller_id = ?");
         $stmt->execute([$status, $orderId, $sellerId]);

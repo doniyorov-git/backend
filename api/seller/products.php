@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         sendJson(['success' => false, 'message' => 'Oldindan to\'lov foizi 1 dan 100 gacha bo\'lishi kerak'], 400);
     }
 
-    if (!$isUpdate && empty($_POST['contract_accepted'])) {
+    if (!$isUpdate && empty($_POST['contract_accepted']) && !hasContractSignature($pdo, 'seller_listing', $sellerId)) {
         sendJson(['success' => false, 'message' => 'Mahsulot joylash uchun shartnomaga rozilik talab qilinadi'], 400);
     }
 
@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
         ");
         $stmt->execute([$id, $sellerId, $name, $sku, $category, $region, $model, $price, $unit, $imagePath, $prepayPercent, $realDays, $photoDays]);
-        recordContractSignature($pdo, 'seller_listing', $sellerId, null, ['product_id' => $id, 'source' => 'product_create']);
+        recordContractSignature($pdo, 'seller_listing', $sellerId, null, ['source' => 'product_create']);
         notifyRole($pdo, 'admin', 'Yangi mahsulot moderatsiyada', $name . ' mahsuloti tasdiqlash uchun yuborildi.', 'info', 'admin-moderation');
     }
     

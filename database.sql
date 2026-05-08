@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS orders (
     comm DECIMAL(15,2) DEFAULT 0,
     comm_status ENUM('pending', 'pending_admin', 'paid') DEFAULT 'pending',
     dispatch_report VARCHAR(255),
+    buyer_payment_proof VARCHAR(255),
+    seller_commission_proof VARCHAR(255),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
