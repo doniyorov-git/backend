@@ -519,8 +519,14 @@ function ensureAppSchema(PDO $pdo) {
     if ($stmt->fetchColumn()) {
         $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'status'");
         $statusColumn = $stmt->fetch();
-        if ($statusColumn && strpos($statusColumn['Type'], 'invoice_generated') === false) {
-            $pdo->exec("ALTER TABLE orders MODIFY status ENUM('pending_seller_accept', 'seller_accepted', 'product_ready', 'invoice_generated', 'dispatched', 'delivered', 'buyer_accepted', 'buyer_paid', 'trade_closed', 'seller_paid_comm', 'paid') DEFAULT 'pending_seller_accept'");
+        if ($statusColumn) {
+            $statusType = $statusColumn['Type'];
+            if (strpos($statusType, 'invoice_generated') !== false) {
+                $pdo->exec("UPDATE orders SET status = 'product_ready' WHERE status = 'invoice_generated'");
+            }
+            if (strpos($statusType, 'product_ready') === false || strpos($statusType, 'invoice_generated') !== false) {
+                $pdo->exec("ALTER TABLE orders MODIFY status ENUM('pending_seller_accept', 'seller_accepted', 'product_ready', 'dispatched', 'delivered', 'buyer_accepted', 'buyer_paid', 'trade_closed', 'seller_paid_comm', 'paid') DEFAULT 'pending_seller_accept'");
+            }
         }
 
         $columns = [
