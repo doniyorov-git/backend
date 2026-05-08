@@ -18,6 +18,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return rootUrl(imagePath);
         }
 
+        function fileUrl(filePath = "") {
+            return imageUrl(filePath);
+        }
+
         function dashboardUrl(role) {
             const folder = role === "admin" ? "admin" : role;
             return rootUrl(`dashboard/${folder}/index.html`);
@@ -161,8 +165,20 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     viewCount: p.view_count,
                     createdAt: p.created_at
                 });
-                const mapOrderItem = item => ({ ...item, prodId: item.product_id || item.prodId, qty: Number(item.quantity || item.qty || 0), price: Number(item.price || 0) });
-                const mapOrder = o => ({ ...o, buyerId: o.buyer_id, sellerId: o.seller_id, commStatus: o.comm_status, dispatchReport: o.dispatch_report, createdAt: o.created_at, updatedAt: o.updated_at, items: (o.items || []).map(mapOrderItem) });
+                const mapOrderItem = item => ({ ...item, prodId: item.product_id || item.prodId, productName: item.product_name || item.productName, qty: Number(item.quantity || item.qty || 0), price: Number(item.price || 0), unit: item.unit });
+                const mapOrder = o => ({
+                    ...o,
+                    buyerId: o.buyer_id,
+                    sellerId: o.seller_id,
+                    commStatus: o.comm_status,
+                    dispatchReport: o.dispatch_report,
+                    buyerPaymentProof: o.buyer_payment_proof,
+                    sellerCommissionProof: o.seller_commission_proof,
+                    sellerInn: o.seller_inn,
+                    createdAt: o.created_at,
+                    updatedAt: o.updated_at,
+                    items: (o.items || []).map(mapOrderItem)
+                });
                 const mapReport = r => ({ ...r, sellerId: r.seller_id, orderId: r.order_id, prodId: r.prod_id, dueDate: r.due_date, createdAt: r.created_at });
                 const mapTicket = t => ({
                     ...t,
@@ -355,7 +371,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             if (direct) return direct;
             const order = DB.orders.find(item => item.sellerId === id || item.buyerId === id);
             if (order) {
-                if (order.sellerId === id) return { id, name: order.seller_name || order.sellerName || "Sotuvchi", role: "seller", bankAccount: order.bank_account, bankMfo: order.mfo };
+                if (order.sellerId === id) return { id, name: order.seller_name || order.sellerName || "Sotuvchi", role: "seller", inn: order.seller_inn || order.sellerInn, bankAccount: order.bank_account, bankMfo: order.mfo };
                 if (order.buyerId === id) return { id, name: order.buyer_name || order.buyerName || "Diler", role: "buyer", inn: order.buyer_inn, phone: order.buyer_phone };
             }
             const product = DB.products.find(item => item.sellerId === id);
@@ -368,7 +384,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function orderContractById(orderId) {
-            return DB.contracts.find(contract => contract.contractType === "buyer_order" && contract.orderId === orderId);
+            const direct = DB.contracts.find(contract => contract.contractType === "buyer_order" && contract.orderId === orderId);
+            if (direct) return direct;
+            const order = DB.orders.find(item => item.id === orderId);
+            return order ? DB.contracts.find(contract => contract.contractType === "buyer_order" && contract.signerId === order.buyerId) : null;
         }
 
         function sellerListingContractForOrder(order) {
@@ -376,6 +395,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
             const relatedByProduct = DB.contracts.find(contract => contract.contractType === "seller_listing" && contract.signerId === order.sellerId && productIds.includes(contract.productId));
             if (relatedByProduct) return relatedByProduct;
             return DB.contracts.find(contract => contract.contractType === "seller_listing" && contract.signerId === order.sellerId);
+        }
+
+        function hasSignedContractType(type) {
+            return DB.contracts.some(contract => contract.contractType === type && contract.signerId === STATE.currentUser?.id);
         }
 
         function platformPaymentParty() {
@@ -415,6 +438,163 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 </div>
                 <p class="text-xs text-muted mt-4">Iltimos, komissiya to'lovini yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
             </div>`;
+        }
+
+        function pdfSafeText(value) {
+            return String(value ?? "")
+                .normalize("NFKD")
+                .replace(/[^\x20-\x7E]/g, "?")
+                .replace(/\s+/g, " ")
+                .trim();
+        }
+
+        function pdfEscape(value) {
+            return pdfSafeText(value).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+        }
+
+        function wrapPdfText(value, max = 86) {
+            const words = pdfSafeText(value).split(" ");
+            const lines = [];
+            let current = "";
+            words.forEach(word => {
+                const next = current ? `${current} ${word}` : word;
+                if (next.length > max && current) {
+                    lines.push(current);
+                    current = word;
+                } else {
+                    current = next;
+                }
+            });
+            if (current) lines.push(current);
+            return lines.length ? lines : [""];
+        }
+
+        function createSimplePdfBlob(title, lines) {
+            const pageWidth = 595;
+            let y = 800;
+            const commands = ["BT"];
+            commands.push(`/F1 16 Tf 1 0 0 1 50 ${y} Tm (${pdfEscape(title)}) Tj`);
+            y -= 30;
+            lines.forEach(entry => {
+                const text = typeof entry === "string" ? entry : entry.text;
+                const size = typeof entry === "string" ? 10 : (entry.size || 10);
+                const gap = typeof entry === "string" ? 15 : (entry.gap || 15);
+                wrapPdfText(text, size >= 12 ? 70 : 86).forEach(line => {
+                    if (y < 60) return;
+                    commands.push(`/F1 ${size} Tf 1 0 0 1 50 ${y} Tm (${pdfEscape(line)}) Tj`);
+                    y -= gap;
+                });
+            });
+            commands.push("ET");
+            const stream = commands.join("\n");
+            const objects = [
+                "<< /Type /Catalog /Pages 2 0 R >>",
+                "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>`,
+                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+                `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`
+            ];
+            let pdf = "%PDF-1.4\n";
+            const offsets = [0];
+            objects.forEach((object, index) => {
+                offsets[index + 1] = pdf.length;
+                pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+            });
+            const xrefOffset = pdf.length;
+            pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+            for (let i = 1; i <= objects.length; i++) {
+                pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+            }
+            pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+            return new Blob([pdf], { type: "application/pdf" });
+        }
+
+        function orderItemLines(order) {
+            const items = order.items || [];
+            if (!items.length) return ["Mahsulotlar: buyurtma tarkibi topilmadi"];
+            return items.flatMap((item, index) => {
+                const product = productById(item.prodId) || {};
+                const name = item.productName || product.name || "Mahsulot";
+                const qty = Number(item.qty || item.quantity || 0);
+                const price = Number(item.price || product.price || 0);
+                return [`${index + 1}. ${name} - ${qty} ${item.unit || product.unit || "dona"} x ${money(price)} = ${money(qty * price)}`];
+            });
+        }
+
+        function sellerPaymentInvoiceBlob(order) {
+            const seller = userById(order.sellerId);
+            const buyer = userById(order.buyerId);
+            const orderContract = orderContractById(order.id);
+            const purpose = paymentPurposeText({
+                contract: orderContract,
+                fallbackDate: order.createdAt || order.date,
+                partyName: seller.name,
+                defaultSuffix: "XK",
+                serviceText: "yetkazib berilgan mahsulotlar uchun to'lov"
+            });
+            return createSimplePdfBlob(`Hisob-faktura #${order.id}`, [
+                { text: `Sana: ${formatDateTime(order.createdAt || today())}`, size: 10 },
+                { text: `Sotuvchi: ${legalPartyName(seller.name, "XK")}`, size: 12 },
+                `STIR: ${seller.inn || order.sellerInn || "Kiritilmagan"}`,
+                `H/r: ${seller.bankAccount || "Kiritilmagan"}`,
+                `MFO: ${seller.bankMfo || "Kiritilmagan"}`,
+                { text: `Xaridor: ${buyer.name || order.buyer_name || "Kiritilmagan"}`, size: 12 },
+                `Xaridor STIR: ${buyer.inn || order.buyer_inn || "Kiritilmagan"}`,
+                { text: "Mahsulotlar:", size: 12 },
+                ...orderItemLines(order),
+                { text: `Jami to'lov: ${money(order.total)}`, size: 13 },
+                `To'lov maqsadi: ${purpose}`
+            ]);
+        }
+
+        function commissionPaymentInvoiceBlob(order) {
+            const platform = platformPaymentParty();
+            const seller = userById(order.sellerId);
+            const commissionContract = sellerListingContractForOrder(order);
+            const purpose = paymentPurposeText({
+                contract: commissionContract,
+                fallbackDate: order.createdAt || order.date,
+                partyName: platform.name,
+                defaultSuffix: "MCHJ",
+                serviceText: "platforma xizmatlari uchun to'lov"
+            });
+            return createSimplePdfBlob(`Komissiya hisob-faktura #${order.id}`, [
+                { text: `Sana: ${formatDateTime(order.createdAt || today())}`, size: 10 },
+                { text: `Qabul qiluvchi: ${legalPartyName(platform.name, "MCHJ")}`, size: 12 },
+                `INN: ${platform.inn}`,
+                `H/r: ${platform.bankAccount}`,
+                `MFO: ${platform.bankMfo}`,
+                { text: `To'lovchi sotuvchi: ${legalPartyName(seller.name, "XK")}`, size: 12 },
+                `Buyurtma summasi: ${money(order.total)}`,
+                `Komissiya (5%): ${money(order.comm || order.total * 0.05)}`,
+                `To'lov maqsadi: ${purpose}`
+            ]);
+        }
+
+        function invoiceBlobFor(order, type) {
+            return type === "admin" ? commissionPaymentInvoiceBlob(order) : sellerPaymentInvoiceBlob(order);
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        function downloadPaymentInvoice(orderId, type) {
+            const order = DB.orders.find(item => item.id === orderId);
+            if (!order) return;
+            const name = type === "admin" ? `commission-invoice-${order.id}.pdf` : `invoice-${order.id}.pdf`;
+            downloadBlob(invoiceBlobFor(order, type), name);
+        }
+
+        function paymentProofLink(path, label = "PDF hujjat") {
+            return path ? `<a class="btn btn-outline" href="${fileUrl(path)}" target="_blank" download><i class="ri-file-pdf-line"></i> ${escapeHtml(label)}</a>` : "";
         }
 
         function roleLabel(role) {
@@ -578,14 +758,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
 
         function sellerListingContractHtml(product = {}) {
             const seller = currentUserParty();
-            const tradeTerms = product.model
-                ? `${product.model === "prepayment" ? `, oldindan to'lov: ${formatPercent(product.prepayPercent)}%` : ", savdo modeli: realizatsiya"}, realizatsiya muddati: ${parseNumberOrDefault(product.realDays, 30)} kun`
-                : "";
             return `<div class="contract-document">
                 <h4>1. SHARTNOMA TOMONLARI</h4>
                 <p>1.1. "RoboTexnika" MCHJ, keyingi o'rinlarda "Platforma" deb yuritiladi, direktor Mirzayev Sardor nomidan bir tomondan, va</p>
                 <p>1.2. "${escapeHtml(seller.name || "Kiritilmagan")}", keyingi o'rinlarda "Ishlab chiqaruvchi" deb yuritiladi, mazkur shartnomani quyidagilar to'g'risida tuzdilar:</p>
-                ${product.name ? `<p><b>Mahsulot:</b> ${escapeHtml(product.name)}, narx: ${money(product.price)}, hudud: ${escapeHtml(product.region)}${tradeTerms}.</p>` : ""}
                 <h4>2. SHARTNOMA PREDMETI</h4>
                 <p>2.1. Platforma Ishlab chiqaruvchining tovarlarini chakana savdo nuqtalariga sotishda vositachilik va axborot-texnologik xizmatlarini ko'rsatadi.</p>
                 <p>2.2. Platforma Mijozlar bazasini shakllantirish, tovarni targ'ib qilish, sotuvlar, yetkazib berish va to'lovlarning elektron hisobini yuritish, bozor tahlili va reyting ko'rsatkichlarini taqdim etish majburiyatlarini oladi.</p>
@@ -616,7 +792,6 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 <h4>1. SHARTNOMA TOMONLARI</h4>
                 <p>1.1. "RoboTexnika" MCHJ, keyingi o'rinlarda "Platforma" deb yuritiladi, direktor Mirzayev Sardor nomidan, va</p>
                 <p>1.2. "${escapeHtml(buyer.name || "Kiritilmagan")}", keyingi o'rinlarda "Xaridor" deb yuritiladi, mazkur shartnomani quyidagilar to'g'risida tuzdilar:</p>
-                <p><b>Buyurtma summasi:</b> ${money(total)}</p>
                 <h4>2. SHARTNOMA PREDMETI</h4>
                 <p>2.1. Platforma Xaridorga tizimdagi Ishlab chiqaruvchilarning mahsulotlarini tanlash, buyurtma berish va yetkazib berishni tashkil qilish xizmatlarini ko'rsatadi.</p>
                 <p>2.2. Xaridor Platforma orqali buyurtma qilingan tovarlarni qabul qilish va ularning haqini belgilangan muddatlarda to'lash majburiyatini oladi.</p>
@@ -1397,8 +1572,9 @@ const STORAGE_KEY = "myDillerUzStateV2";
                         <div class="input-group" style="margin:0;"><label>Qidirish</label><div class="search-field"><i class="ri-search-line"></i><input class="input-control" value="${escapeHtml(f.search)}" oninput="setFilter('comm','search',this.value)" placeholder="Buyurtma yoki sotuvchi"></div></div>
                         <div class="input-group" style="margin:0;"><label>Holat</label>${selectInline(f.status, [{ value: "all", label: "Barchasi" }, { value: "pending", label: "Kutilmoqda" }, { value: "pending_admin", label: "Tasdiq kutilmoqda" }, { value: "paid", label: "To'langan" }], "setFilter('comm','status',this.value)")}</div>
                     </div>
-                    ${orders.length ? `<div class="table-responsive"><table><thead><tr><th>Buyurtma</th><th>Sotuvchi</th><th>Komissiya</th><th>Holat</th><th>Amal</th></tr></thead><tbody>${orders.map(order => `
+                    ${orders.length ? `<div class="table-responsive"><table><thead><tr><th>Buyurtma</th><th>Sotuvchi</th><th>Komissiya</th><th>Holat</th><th>Hujjat</th><th>Amal</th></tr></thead><tbody>${orders.map(order => `
                         <tr><td>#${order.id}</td><td>${escapeHtml(userById(order.sellerId).name)}</td><td class="font-bold text-primary">${money(order.comm)}</td><td>${statusBadge(order.commStatus)}</td>
+                        <td><button class="btn btn-outline" style="padding:0.4rem 0.8rem; font-size:0.8rem; min-height:0;" onclick="downloadPaymentInvoice('${order.id}', 'admin')">Hisob-faktura</button>${order.sellerCommissionProof ? `<div class="mt-2">${paymentProofLink(order.sellerCommissionProof, "Tasdiq")}</div>` : ""}</td>
                         <td>${order.commStatus === 'pending_admin' || order.status === 'seller_paid_comm' ? `<button class="btn btn-success" style="padding:0.4rem 0.8rem; font-size:0.8rem; min-height:0;" onclick="confirmCommPayment('${order.id}')">Qabul qildim</button>` : ''}</td></tr>`).join("")}</tbody></table></div>` : emptyHtml("ri-money-dollar-circle-line", "Komissiya ma'lumotlari yo'q")}
                 </div>`;
         }
@@ -1454,7 +1630,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function renderSellerFinance(container) {
             const orders = DB.orders.filter(order => order.sellerId === STATE.currentUser.id);
             container.innerHTML = `<div class="card"><div class="section-head"><div><h3>Moliya va komissiya</h3><p class="text-sm text-muted">5% platforma komissiyasi</p></div></div>
-                ${orders.length ? `<div class="table-responsive"><table><thead><tr><th>Buyurtma</th><th>Summa</th><th>Komissiya</th><th>Holat</th><th>Amal</th></tr></thead><tbody>${orders.map(order => `<tr><td>#${order.id}</td><td>${money(order.total)}</td><td class="font-bold text-primary">${money(order.comm)}</td><td>${statusBadge(order.commStatus)}</td><td>${(order.commStatus === 'pending' || !order.commStatus) ? `<button class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem; min-height:0;" title="Komissiya to'lash" onclick="openFinancePaymentModal('${order.id}')">To'lash</button>` : ''}</td></tr>`).join("")}</tbody></table></div>` : emptyHtml("ri-wallet-3-line", "Moliya ma'lumotlari yo'q")}
+                ${orders.length ? `<div class="table-responsive"><table><thead><tr><th>Buyurtma</th><th>Summa</th><th>Komissiya</th><th>Holat</th><th>Hujjat</th><th>Amal</th></tr></thead><tbody>${orders.map(order => `<tr><td>#${order.id}</td><td>${money(order.total)}</td><td class="font-bold text-primary">${money(order.comm)}</td><td>${statusBadge(order.commStatus)}</td><td><button class="btn btn-outline" style="padding:0.4rem 0.8rem; font-size:0.8rem; min-height:0;" onclick="downloadPaymentInvoice('${order.id}', 'admin')">Hisob-faktura</button>${order.sellerCommissionProof ? `<div class="mt-2">${paymentProofLink(order.sellerCommissionProof, "Tasdiq")}</div>` : ""}</td><td>${(order.commStatus === 'pending' || !order.commStatus) ? `<button class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem; min-height:0;" title="Komissiya to'lash" onclick="openFinancePaymentModal('${order.id}')">To'lash</button>` : ''}</td></tr>`).join("")}</tbody></table></div>` : emptyHtml("ri-wallet-3-line", "Moliya ma'lumotlari yo'q")}
             </div>`;
         }
 
@@ -1528,6 +1704,38 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return `Foydalanuvchi: ${contract.signerName || "Noma'lum"}`;
         }
 
+        function paymentDocumentsForCurrentUser() {
+            const role = STATE.currentUser?.role;
+            return DB.orders.filter(order => {
+                if (role === "admin") return true;
+                if (role === "seller") return order.sellerId === STATE.currentUser.id;
+                if (role === "buyer") return order.buyerId === STATE.currentUser.id;
+                return false;
+            });
+        }
+
+        function paymentDocumentsTable() {
+            const orders = paymentDocumentsForCurrentUser();
+            if (!orders.length) return emptyHtml("ri-file-pdf-line", "To'lov hujjatlari hozircha yo'q");
+            return `<div class="table-responsive"><table>
+                <thead><tr><th>Buyurtma</th><th>Tomonlar</th><th>Hisob-faktura</th><th>To'lov tasdiqlari</th></tr></thead>
+                <tbody>${orders.map(order => `
+                    <tr>
+                        <td>#${escapeHtml(order.id)}<div class="text-xs text-muted">${escapeHtml(formatDateTime(order.createdAt || order.date))}</div></td>
+                        <td><b>${escapeHtml(userById(order.sellerId).name)}</b><div class="text-xs text-muted">${escapeHtml(userById(order.buyerId).name)}</div></td>
+                        <td><div class="flex gap-2" style="flex-wrap:wrap;">
+                            <button class="btn btn-outline" onclick="downloadPaymentInvoice('${order.id}', 'seller')">Mahsulot to'lovi PDF</button>
+                            ${STATE.currentUser.role !== "buyer" ? `<button class="btn btn-outline" onclick="downloadPaymentInvoice('${order.id}', 'admin')">Komissiya PDF</button>` : ""}
+                        </div></td>
+                        <td><div class="flex gap-2" style="flex-wrap:wrap;">
+                            ${paymentProofLink(order.buyerPaymentProof, "Xaridor tasdig'i") || `<span class="text-xs text-muted">Xaridor tasdig'i yuklanmagan</span>`}
+                            ${STATE.currentUser.role !== "buyer" ? (paymentProofLink(order.sellerCommissionProof, "Komissiya tasdig'i") || `<span class="text-xs text-muted">Komissiya tasdig'i yuklanmagan</span>`) : ""}
+                        </div></td>
+                    </tr>
+                `).join("")}</tbody>
+            </table></div>`;
+        }
+
         function renderContracts(container) {
             const contracts = DB.contracts || [];
             container.innerHTML = `
@@ -1554,6 +1762,15 @@ const STORAGE_KEY = "myDillerUzStateV2";
                             </tr>
                         `).join("")}</tbody>
                     </table></div>` : emptyHtml("ri-file-shield-2-line", "Shartnomalar hozircha yo'q")}
+                </div>
+                <div class="card mt-4">
+                    <div class="section-head">
+                        <div>
+                            <h3>To'lov hujjatlari</h3>
+                            <p class="text-sm text-muted">Hisob-fakturalarni ko'rish/yuklab olish va yuklangan to'lov tasdiqlarini ochish.</p>
+                        </div>
+                    </div>
+                    ${paymentDocumentsTable()}
                 </div>`;
         }
 
@@ -1814,13 +2031,17 @@ const STORAGE_KEY = "myDillerUzStateV2";
             if (file) formData.append("image", file);
             if (STATE.editingProductId) formData.append("id", STATE.editingProductId);
 
-            if (!STATE.editingProductId) {
+            if (!STATE.editingProductId && !hasSignedContractType("seller_listing")) {
                 STATE.pendingProductFormData = formData;
                 modal("Mahsulot joylash shartnomasi", sellerListingContractHtml({ name, price, region, model, prepayPercent, realDays }), `
                     <button class="btn btn-outline" onclick="closeModal()">Bekor qilish</button>
                     <button class="btn btn-primary" onclick="acceptSellerListingContract()">Roziman va saqlash</button>
                 `);
                 return;
+            }
+
+            if (!STATE.editingProductId) {
+                formData.set("contract_accepted", "1");
             }
 
             await submitProductForm(formData);
@@ -1906,7 +2127,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 return product ? sum + product.price * item.qty : sum;
             }, 0);
 
-            if (!contractAccepted) {
+            if (!contractAccepted && !hasSignedContractType("buyer_order")) {
                 modal("Mahsulot yetkazib berish shartnomasi", buyerOrderContractHtml(cartTotal), `
                     <button class="btn btn-outline" onclick="closeModal()">Bekor qilish</button>
                     <button class="btn btn-primary" onclick="checkout(true)">Roziman va buyurtma berish</button>
@@ -1968,6 +2189,11 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 </div>
                 <h4 class="mb-2">Mahsulotlar</h4>
                 <div class="details-list">${items}</div>
+                <div class="mt-4 flex gap-2" style="flex-wrap:wrap;">
+                    <button class="btn btn-outline" onclick="downloadPaymentInvoice('${order.id}', 'seller')"><i class="ri-file-pdf-line"></i> Hisob-fakturani yuklab olish</button>
+                    ${paymentProofLink(order.buyerPaymentProof, "Xaridor to'lov tasdig'i")}
+                    ${paymentProofLink(order.sellerCommissionProof, "Komissiya to'lov tasdig'i")}
+                </div>
                 ${orderContract ? `<div class="mt-4"><button class="btn btn-outline" onclick="openContractDetails('${orderContract.id}')"><i class="ri-file-shield-2-line"></i> Xaridor imzolagan shartnoma</button></div>` : ""}
             `, `<button class="btn btn-outline" onclick="closeModal()">Yopish</button>${actions}`);
         }
@@ -1991,7 +2217,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 }
             }
             if (STATE.currentUser.role === "admin" && order.status === "seller_paid_comm") {
-                return `<button class="btn btn-success" onclick="updateOrderStatus('${order.id}','paid')">Komissiyani qabul qildim (Yakunlash)</button>`;
+                return `<button class="btn btn-success" onclick="confirmCommPayment('${order.id}')">Komissiyani qabul qildim (Yakunlash)</button>`;
             }
             return "";
         }
@@ -1999,11 +2225,9 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function openPaymentModal(orderId, type) {
             const order = DB.orders.find(item => item.id === orderId);
             if (!order) return;
-            
-            let title = "";
-            let body = "";
-            let action = "";
-            
+            const blob = invoiceBlobFor(order, type);
+            const previewUrl = URL.createObjectURL(blob);
+
             if (type === "seller") {
                 const seller = userById(order.sellerId);
                 const orderContract = orderContractById(order.id);
@@ -2014,8 +2238,12 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     defaultSuffix: "XK",
                     serviceText: "yetkazib berilgan mahsulotlar uchun to'lov"
                 });
-                title = "To'lov cheki (Sotuvchiga)";
-                body = `<div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
+                const body = `<div class="grid-2" style="align-items:start;">
+                    <div>
+                        <div class="text-sm text-muted mb-2">Hisob-faktura PDF ko'rinishi</div>
+                        <iframe src="${previewUrl}" style="width:100%;height:520px;border:1px solid var(--border);border-radius:12px;background:white;"></iframe>
+                    </div>
+                    <div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
                     <div style="font-size:3.5rem;color:var(--primary);margin-bottom:1rem;"><i class="ri-secure-payment-line"></i></div>
                     <h3 class="mb-3">Sotuvchi rekvizitlari</h3>
                     <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
@@ -2028,16 +2256,63 @@ const STORAGE_KEY = "myDillerUzStateV2";
                         <div class="text-sm text-muted">To'lanadigan summa:</div>
                         <div class="font-bold text-primary" style="font-size:2rem;">${money(order.total)}</div>
                     </div>
-                    <p class="text-xs text-muted mt-4">Iltimos, to'lovni yuqoridagi rekvizitlarga amalga oshiring va tasdiqlang.</p>
+                    <div class="input-group mt-4" style="text-align:left;"><label>To'langanligini tasdiqlovchi PDF</label><input id="payment-proof-${order.id}-seller" type="file" accept="application/pdf,.pdf" class="input-control"></div>
+                    ${paymentProofLink(order.buyerPaymentProof, "Oldingi to'lov tasdig'i")}
+                    <p class="text-xs text-muted mt-4">Hisob-fakturani yuklab olib, bank orqali to'lov qiling va tasdiqlovchi PDF hujjatni yuklang.</p>
+                    </div>
                 </div>`;
-                action = `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','buyer_paid')"><i class="ri-check-double-line"></i> To'ladim</button>`;
+                modal("Hisob-faktura va to'lov (Sotuvchiga)", body, `<button class="btn btn-outline" onclick="openOrderDetails('${order.id}')"><i class="ri-arrow-left-line"></i> Orqaga</button><button class="btn btn-outline" onclick="downloadPaymentInvoice('${order.id}', 'seller')"><i class="ri-download-line"></i> PDF yuklab olish</button><button class="btn btn-primary" onclick="submitPaymentProof('${order.id}','seller')"><i class="ri-check-double-line"></i> To'ladim</button>`);
             } else if (type === "admin") {
-                title = "To'lov cheki (Komissiya)";
-                body = adminCommissionPaymentHtml(order);
-                action = `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','seller_paid_comm')"><i class="ri-check-double-line"></i> To'ladim</button>`;
+                const body = `<div class="grid-2" style="align-items:start;">
+                    <div>
+                        <div class="text-sm text-muted mb-2">Komissiya hisob-fakturasi PDF ko'rinishi</div>
+                        <iframe src="${previewUrl}" style="width:100%;height:520px;border:1px solid var(--border);border-radius:12px;background:white;"></iframe>
+                    </div>
+                    <div>
+                        ${adminCommissionPaymentHtml(order)}
+                        <div class="input-group mt-4"><label>Komissiya to'lovini tasdiqlovchi PDF</label><input id="payment-proof-${order.id}-admin" type="file" accept="application/pdf,.pdf" class="input-control"></div>
+                        ${paymentProofLink(order.sellerCommissionProof, "Oldingi komissiya tasdig'i")}
+                    </div>
+                </div>`;
+                modal("Komissiya hisob-fakturasi va to'lov", body, `<button class="btn btn-outline" onclick="openOrderDetails('${order.id}')"><i class="ri-arrow-left-line"></i> Orqaga</button><button class="btn btn-outline" onclick="downloadPaymentInvoice('${order.id}', 'admin')"><i class="ri-download-line"></i> PDF yuklab olish</button><button class="btn btn-primary" onclick="submitPaymentProof('${order.id}','admin')"><i class="ri-check-double-line"></i> To'ladim</button>`);
             }
-            
-            modal(title, body, `<button class="btn btn-outline" onclick="openOrderDetails('${order.id}')"><i class="ri-arrow-left-line"></i> Orqaga</button>${action}`);
+        }
+
+        async function submitPaymentProof(orderId, type) {
+            const order = DB.orders.find(item => item.id === orderId);
+            if (!order) return;
+            const input = document.getElementById(`payment-proof-${orderId}-${type}`);
+            const file = input?.files?.[0];
+            const existingProof = type === "admin" ? order.sellerCommissionProof : order.buyerPaymentProof;
+            if (!file && !existingProof) {
+                showToast("To'lovni tasdiqlovchi PDF hujjatni tanlang", "warning");
+                return;
+            }
+            if (file && file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+                showToast("Faqat PDF hujjat yuklang", "warning");
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append("action", "update_status");
+                formData.append("id", orderId);
+                if (type === "admin") {
+                    formData.append("status", "seller_paid_comm");
+                    if (file) formData.append("commission_payment_proof", file);
+                    await apiFetch('api/seller/orders.php', 'POST', formData, true);
+                } else {
+                    formData.append("status", "buyer_paid");
+                    if (file) formData.append("payment_proof", file);
+                    await apiFetch('api/buyer/orders.php', 'POST', formData, true);
+                }
+                await refreshDB();
+                closeModal();
+                showToast("To'lov tasdiqlovchi hujjat yuborildi", "success");
+                renderCurrentView();
+            } catch (e) {
+                showToast(e.message, "danger");
+            }
         }
 
         async function updateOrderStatus(id, status) {
@@ -2056,26 +2331,11 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function openFinancePaymentModal(orderId) {
-            const order = DB.orders.find(item => item.id === orderId);
-            if (!order) return;
-            
-            const title = "To'lov cheki (Komissiya)";
-            const body = adminCommissionPaymentHtml(order);
-            const action = `<button class="btn btn-primary" onclick="markCommPaidBySeller('${order.id}')"><i class="ri-check-double-line"></i> To'ladim</button>`;
-            
-            modal(title, body, `<button class="btn btn-outline" onclick="closeModal()">Orqaga</button>${action}`);
+            openPaymentModal(orderId, 'admin');
         }
 
         async function markCommPaidBySeller(orderId) {
-            try {
-                await apiFetch('api/seller/orders.php', 'POST', { action: 'update_status', id: orderId, status: 'seller_paid_comm' });
-                await refreshDB();
-                closeModal();
-                showToast("To'lov qabul qilindi, adminga yuborildi", "success");
-                renderCurrentView();
-            } catch (e) {
-                showToast(e.message, "danger");
-            }
+            openPaymentModal(orderId, 'admin');
         }
 
         async function confirmCommPayment(orderId) {

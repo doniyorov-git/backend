@@ -85,6 +85,30 @@ function saveUploadedFile($fieldName, $folder, $prefix = 'file') {
     return 'uploads/' . $safeFolder . '/' . $filename;
 }
 
+function saveUploadedDocument($fieldName, $folder, $prefix = 'doc', $allowedExtensions = ['pdf']) {
+    if (!isset($_FILES[$fieldName]) || $_FILES[$fieldName]['error'] !== UPLOAD_ERR_OK) {
+        return '';
+    }
+
+    $ext = strtolower(pathinfo($_FILES[$fieldName]['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, $allowedExtensions, true)) {
+        sendJson(['success' => false, 'message' => 'Faqat PDF hujjat yuklash mumkin'], 400);
+    }
+
+    $safeFolder = trim($folder, '/');
+    $uploadDir = appRootPath('uploads/' . $safeFolder);
+    ensureDirectory($uploadDir);
+
+    $filename = uniqid($prefix . '_', true) . '.' . $ext;
+    $dest = $uploadDir . '/' . $filename;
+
+    if (!move_uploaded_file($_FILES[$fieldName]['tmp_name'], $dest)) {
+        sendJson(['success' => false, 'message' => 'Hujjatni saqlashda xatolik'], 500);
+    }
+
+    return 'uploads/' . $safeFolder . '/' . $filename;
+}
+
 function appEscape($value) {
     return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES, 'UTF-8');
 }
@@ -210,18 +234,7 @@ function appFetchOrder(PDO $pdo, $orderId) {
 function appSellerListingContractHtml(PDO $pdo, $sellerId, $context = []) {
     $platform = appPlatformParty($pdo);
     $seller = appFetchUserParty($pdo, $sellerId);
-    $product = appFetchProduct($pdo, $context['product_id'] ?? null);
     $contractMeta = appContractMetaHtml($context['contract_number'] ?? '', $context['contract_signed_at'] ?? '');
-    $productTradeTerms = '';
-    if ($product) {
-        $productTradeTerms = $product['model'] === 'prepayment'
-            ? ', oldindan to\'lov: ' . appEscape($product['prepay_percent'] ?? 0) . '%'
-            : ', savdo modeli: realizatsiya';
-        $productTradeTerms .= ', realizatsiya muddati: ' . appEscape($product['real_days'] ?? 30) . ' kun';
-    }
-    $productLine = $product
-        ? '<p><b>Mahsulot:</b> ' . appEscape($product['name']) . ' (' . appEscape($product['sku'] ?? '') . '), narx: ' . appEscape($product['price']) . ' UZS, hudud: ' . appEscape($product['region'] ?? '') . $productTradeTerms . '.</p>'
-        : '';
 
     $content = '
         <div class="contract-document">
@@ -238,7 +251,6 @@ function appSellerListingContractHtml(PDO $pdo, $sellerId, $context = []) {
                 <li>Ishlab chiqaruvchiga bozor tahlili va reyting ko\'rsatkichlarini taqdim etish;</li>
                 <li>Shartnomaning 5-bandiga muvofiq kafolatli hisob-kitoblarni ta\'minlash.</li>
             </ul>
-            ' . $productLine . '
             <h4>3. TOMONLARNING HUQUQ VA MAJBURIYATLARI</h4>
             <p>3.1. Ishlab chiqaruvchi tovarlarning sifati va amaldagi standartlarga mosligini ta\'minlaydi, Platforma orqali kelgan buyurtmalarni o\'z vaqtida va to\'liq hajmda yetkazib beradi, tovar qoldiqlari va narxlar o\'zgarishi haqida Platformani zudlik bilan xabardor qiladi.</p>
             <p>3.2. Platforma Ishlab chiqaruvchining reyting ko\'rsatkichlari pasaygan taqdirda xizmat ko\'rsatishni vaqtincha to\'xtatish hamda Mijozlar va Ishlab chiqaruvchi o\'rtasidagi to\'lov intizomini nazorat qilish huquqiga ega.</p>
@@ -274,12 +286,7 @@ function appSellerListingContractHtml(PDO $pdo, $sellerId, $context = []) {
 function appBuyerOrderContractHtml(PDO $pdo, $buyerId, $sellerId, $context = []) {
     $platform = appPlatformParty($pdo);
     $buyer = appFetchUserParty($pdo, $buyerId);
-    $seller = appFetchUserParty($pdo, $sellerId);
-    $order = appFetchOrder($pdo, $context['order_id'] ?? null);
     $contractMeta = appContractMetaHtml($context['contract_number'] ?? '', $context['contract_signed_at'] ?? '');
-    $orderLine = $order
-        ? '<p><b>Buyurtma:</b> #' . appEscape($order['id']) . ', summa: ' . appEscape($order['total']) . ' UZS.</p>'
-        : '';
 
     $content = '
         <div class="contract-document">
@@ -287,7 +294,6 @@ function appBuyerOrderContractHtml(PDO $pdo, $buyerId, $sellerId, $context = [])
             <h4>1. SHARTNOMA TOMONLARI</h4>
             <p>1.1. "' . appEscape($platform['name']) . '", keyingi o\'rinlarda "Platforma" deb yuritiladi, direktor ' . appEscape($platform['director']) . ' nomidan, va</p>
             <p>1.2. "' . appEscape(appValue($buyer['name'] ?? '')) . '", keyingi o\'rinlarda "Xaridor" deb yuritiladi, direktor yoki YATT ' . appEscape(appValue($buyer['director'] ?? '', 'Kiritilmagan')) . ' nomidan, mazkur shartnomani quyidagilar to\'g\'risida tuzdilar:</p>
-            ' . $orderLine . '
             <h4>2. SHARTNOMA PREDMETI</h4>
             <p>2.1. Platforma Xaridorga tizimdagi Ishlab chiqaruvchilarning mahsulotlarini tanlash, buyurtma berish va yetkazib berishni tashkil qilish xizmatlarini ko\'rsatadi.</p>
             <p>2.2. Xaridor Platforma orqali buyurtma qilingan tovarlarni qabul qilish va ularning haqini belgilangan muddatlarda to\'lash majburiyatini oladi.</p>
@@ -314,11 +320,10 @@ function appBuyerOrderContractHtml(PDO $pdo, $buyerId, $sellerId, $context = [])
             <p>8.2. Shartnoma Platformaning elektron tizimida "Ofertani qabul qilish" yoki "Roziman" tugmasini bosish orqali ham tuzilishi mumkin va u yuridik kuchga ega.</p>
             <h4>9. TOMONLARNING REKVIZITLARI</h4>
             <div class="contract-parties">' . appPartyRequisitesHtml('PLATFORMA', $platform) . appPartyRequisitesHtml('XARIDOR', $buyer ?: []) . '</div>
-            <p><b>Sotuvchi ma\'lumotnomasi:</b> ' . appEscape(appValue($seller['name'] ?? '')) . ', STIR: ' . appEscape(appValue($seller['inn'] ?? '')) . ', telefon: ' . appEscape(appValue($seller['phone'] ?? '')) . '.</p>
         </div>
     ';
 
-    return ['title' => 'Mahsulot yetkazib berish va xizmat ko\'rsatish shartnomasi', 'content' => $content, 'signer' => $buyer, 'counterparty' => $seller];
+    return ['title' => 'Mahsulot yetkazib berish va xizmat ko\'rsatish shartnomasi', 'content' => $content, 'signer' => $buyer, 'counterparty' => null];
 }
 
 function appPlatformTermsContractHtml(PDO $pdo, $userId, $context = []) {
@@ -364,7 +369,22 @@ function buildContractDocument(PDO $pdo, $type, $signerId, $counterpartyId = nul
     return appPlatformTermsContractHtml($pdo, $signerId, $context);
 }
 
+function hasContractSignature(PDO $pdo, $type, $signerId) {
+    $stmt = $pdo->prepare("SELECT 1 FROM contract_signatures WHERE contract_type = ? AND signer_id = ? LIMIT 1");
+    $stmt->execute([$type, $signerId]);
+    return (bool) $stmt->fetchColumn();
+}
+
 function recordContractSignature(PDO $pdo, $type, $signerId, $counterpartyId = null, $context = []) {
+    if (in_array($type, ['seller_listing', 'buyer_order'], true)) {
+        $stmt = $pdo->prepare("SELECT id FROM contract_signatures WHERE contract_type = ? AND signer_id = ? ORDER BY signed_at ASC LIMIT 1");
+        $stmt->execute([$type, $signerId]);
+        $existingId = $stmt->fetchColumn();
+        if ($existingId) {
+            return $existingId;
+        }
+    }
+
     $contractNumber = appGenerateContractNumber($pdo);
     $signedAt = date('Y-m-d H:i:s');
     $context = array_merge($context, [
@@ -487,6 +507,26 @@ function ensureAppSchema(PDO $pdo) {
                 SELECT COUNT(*)
                 FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = ?
+            ");
+            $stmt->execute([$column]);
+            if ((int) $stmt->fetchColumn() === 0) {
+                $pdo->exec($sql);
+            }
+        }
+    }
+
+    $stmt = $pdo->query("SHOW TABLES LIKE 'orders'");
+    if ($stmt->fetchColumn()) {
+        $columns = [
+            'buyer_payment_proof' => "ALTER TABLE orders ADD COLUMN buyer_payment_proof VARCHAR(255) NULL AFTER dispatch_report",
+            'seller_commission_proof' => "ALTER TABLE orders ADD COLUMN seller_commission_proof VARCHAR(255) NULL AFTER buyer_payment_proof"
+        ];
+
+        foreach ($columns as $column => $sql) {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND COLUMN_NAME = ?
             ");
             $stmt->execute([$column]);
             if ((int) $stmt->fetchColumn() === 0) {

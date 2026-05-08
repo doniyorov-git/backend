@@ -6,7 +6,7 @@ $buyerId = $_SESSION['user']['id'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $stmt = $pdo->prepare("
-        SELECT o.*, s.name as seller_name, s.phone as seller_phone, s.bank_account, s.mfo 
+        SELECT o.*, s.name as seller_name, s.phone as seller_phone, s.inn as seller_inn, s.bank_account, s.mfo 
         FROM orders o
         JOIN users s ON o.seller_id = s.id
         WHERE o.buyer_id = ?
@@ -28,14 +28,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     sendJson(['success' => true, 'data' => $orders]);
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $data = json_decode(file_get_contents('php://input'), true);
+    $isMultipart = !empty($_POST);
+    $data = $isMultipart ? $_POST : (json_decode(file_get_contents('php://input'), true) ?: []);
     
     if (isset($data['action']) && $data['action'] === 'create_order') {
         if (empty($data['sellerId']) || empty($data['items']) || empty($data['total'])) {
             sendJson(['success' => false, 'message' => 'Missing data'], 400);
         }
 
-        if (empty($data['contract_accepted'])) {
+        if (empty($data['contract_accepted']) && !hasContractSignature($pdo, 'buyer_order', $buyerId)) {
             sendJson(['success' => false, 'message' => 'Buyurtma berish uchun shartnomaga rozilik talab qilinadi'], 400);
         }
         
@@ -60,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $stmt3->execute([$repId, $data['sellerId'], $orderId, $item['prodId'], 'pending', $dueDate]);
             }
 
-            recordContractSignature($pdo, 'buyer_order', $buyerId, $data['sellerId'], ['order_id' => $orderId, 'source' => 'checkout']);
+            recordContractSignature($pdo, 'buyer_order', $buyerId, null, ['source' => 'checkout']);
             
             $pdo->commit();
             createNotification($pdo, $data['sellerId'], 'Yangi buyurtma', '#' . $orderId . ' buyurtma qabul qilindi.', 'info', 'seller-orders');
@@ -74,10 +75,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if (empty($data['id']) || empty($data['status'])) {
             sendJson(['success' => false, 'message' => 'Missing parameters'], 400);
         }
-        
-        $stmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ? AND buyer_id = ?");
-        $stmt->execute([$data['status'], $data['id'], $buyerId]);
-        
+
+        $stmt = $pdo->prepare("SELECT buyer_payment_proof FROM orders WHERE id = ? AND buyer_id = ?");
+        $stmt->execute([$data['id'], $buyerId]);
+        $existingOrder = $stmt->fetch();
+        if (!$existingOrder) {
+            sendJson(['success' => false, 'message' => 'Buyurtma topilmadi'], 404);
+        }
+
+        $paymentProof = '';
+        if ($data['status'] === 'buyer_paid') {
+            $paymentProof = saveUploadedDocument('payment_proof', 'payments', 'buyer_pay');
+            if (!$paymentProof && empty($existingOrder['buyer_payment_proof'])) {
+                sendJson(['success' => false, 'message' => 'To\'lovni tasdiqlovchi PDF hujjatni yuklang'], 400);
+            }
+        }
+
+        if ($paymentProof) {
+            $stmt = $pdo->prepare("UPDATE orders SET status = ?, buyer_payment_proof = ? WHERE id = ? AND buyer_id = ?");
+            $stmt->execute([$data['status'], $paymentProof, $data['id'], $buyerId]);
+        } else {
+            $stmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ? AND buyer_id = ?");
+            $stmt->execute([$data['status'], $data['id'], $buyerId]);
+        }
+
         if ($data['status'] === 'paid') { // legacy logic mapping
             $stmt = $pdo->prepare("UPDATE orders SET comm_status = 'paid' WHERE id = ?");
             $stmt->execute([$data['id']]);
