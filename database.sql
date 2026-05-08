@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS orders (
     buyer_id VARCHAR(50) NOT NULL,
     seller_id VARCHAR(50) NOT NULL,
     total DECIMAL(15,2) NOT NULL,
-    status ENUM('pending_seller_accept', 'seller_accepted', 'product_ready', 'invoice_generated', 'dispatched', 'delivered', 'buyer_accepted', 'buyer_paid', 'trade_closed', 'seller_paid_comm', 'paid') DEFAULT 'pending_seller_accept',
+    status ENUM('pending_seller_accept', 'seller_accepted', 'product_ready', 'dispatched', 'delivered', 'buyer_accepted', 'buyer_paid', 'trade_closed', 'seller_paid_comm', 'paid') DEFAULT 'pending_seller_accept',
     comm DECIMAL(15,2) DEFAULT 0,
     comm_status ENUM('pending', 'pending_admin', 'paid') DEFAULT 'pending',
     dispatch_report VARCHAR(255),

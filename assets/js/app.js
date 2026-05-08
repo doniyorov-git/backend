@@ -61,9 +61,8 @@ const STORAGE_KEY = "myDillerUzStateV2";
 
         const ORDER_FLOW = [
             { value: "pending_seller_accept", label: "Buyurtma berildi" },
-            { value: "seller_accepted", label: "Sotuvchi qabul qildi" },
+            { value: "seller_accepted", label: "Qabul qilindi" },
             { value: "product_ready", label: "Mahsulot tayyor" },
-            { value: "invoice_generated", label: "Hisob-faktura yaratildi" },
             { value: "dispatched", label: "Yetkazib berishga berildi" },
             { value: "delivered", label: "Yetkazildi" },
             { value: "buyer_accepted", label: "Magazin qabul qildi" },
@@ -378,8 +377,13 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return order.commissionDueAt || formatDateTimeForAttr(addDaysToDate(order.updatedAt || order.createdAt || order.date, COMMISSION_PAYMENT_DAYS));
         }
 
+        function normalizedOrderStatus(status) {
+            return status === "invoice_generated" ? "product_ready" : status;
+        }
+
         function orderStatusIndex(status) {
-            return ORDER_FLOW.findIndex(item => item.value === status);
+            const normalized = normalizedOrderStatus(status);
+            return ORDER_FLOW.findIndex(item => item.value === normalized);
         }
 
         function orderStatusAtLeast(order, status) {
@@ -389,7 +393,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function sellerInvoiceAvailable(order) {
-            return Boolean(order?.invoiceGeneratedAt) || orderStatusAtLeast(order, "product_ready");
+            return orderStatusAtLeast(order, "product_ready");
         }
 
         function buyerAcceptancePdfAvailable(order) {
@@ -462,12 +466,13 @@ const STORAGE_KEY = "myDillerUzStateV2";
 
         function userById(id) {
             if (id === ADMIN_USER.id) return ADMIN_USER;
+            if (STATE.currentUser?.id === id) return normalizeSessionUser(STATE.currentUser);
             const direct = DB.users.find(user => user.id === id);
             if (direct) return direct;
             const order = DB.orders.find(item => item.sellerId === id || item.buyerId === id);
             if (order) {
                 if (order.sellerId === id) return { id, name: order.seller_name || order.sellerName || "Sotuvchi", role: "seller", inn: order.seller_inn || order.sellerInn, bankAccount: order.bank_account, bankMfo: order.mfo };
-                if (order.buyerId === id) return { id, name: order.buyer_name || order.buyerName || "Diler", role: "buyer", inn: order.buyer_inn, phone: order.buyer_phone };
+                if (order.buyerId === id) return { id, name: order.buyer_name || order.buyerName || "Diler", role: "buyer", inn: order.buyer_inn, phone: order.buyer_phone, bankAccount: order.buyer_bank_account, bankMfo: order.buyer_mfo };
             }
             const product = DB.products.find(item => item.sellerId === id);
             if (product) return { id, name: product.sellerName || product.seller_name || "Sotuvchi", role: "seller", phone: product.sellerPhone || product.seller_phone };
@@ -631,10 +636,6 @@ const STORAGE_KEY = "myDillerUzStateV2";
             }
             pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
             return new Blob([pdf], { type: "application/pdf" });
-        }
-
-        function createPdfBlobFromCommands(commands, pageWidth = 842, pageHeight = 595) {
-            return createPdfBlobFromPages([commands], pageWidth, pageHeight);
         }
 
         function invoiceDateParts(value) {
@@ -1080,146 +1081,6 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return createPdfBlobFromJpegs(images);
         }
 
-        function createLegacyInvoicePdfBlob(order, type) {
-            const seller = userById(order.sellerId);
-            const buyer = userById(order.buyerId);
-            const platform = platformPaymentParty();
-            const supplier = type === "admin" ? { ...platform, role: "platform" } : seller;
-            const customer = type === "admin" ? seller : buyer;
-            const contract = type === "admin" ? sellerListingContractForOrder(order) : orderContractById(order.id);
-            const date = invoiceDateParts(order.invoiceGeneratedAt || order.updatedAt || order.createdAt || order.date);
-            const number = invoiceNumber(order, type);
-            const rows = invoiceRows(order, type);
-            const totals = invoiceTotals(rows.reduce((sum, row) => sum + row.total, 0));
-            const commands = [];
-            const pages = [commands];
-            const pageWidth = 842;
-            const pageHeight = 595;
-            const margin = 36;
-            const tableX = margin;
-            const tableWidth = pageWidth - margin * 2;
-            const title = type === "admin" ? "Komissiya hisobvaraq-faktura" : "Hisobvaraq-faktura";
-
-            const accent = type === "admin" ? "#f97316" : "#0f766e";
-            const accentDark = type === "admin" ? "#c2410c" : "#0f766e";
-            const headerFill = type === "admin" ? "#fff7ed" : "#ecfeff";
-            drawRect(commands, 0, pageHeight - 88, pageWidth, 88, { fill: headerFill, stroke: false });
-            drawRect(commands, 0, pageHeight - 8, pageWidth, 8, { fill: accent, stroke: false });
-            drawRect(commands, margin, 535, 74, 24, { fill: "#ffffff", color: type === "admin" ? "#fed7aa" : "#99f6e4" });
-            drawText(commands, "STANDART", margin + 37, 543, { size: 8, bold: true, align: "center", color: accentDark });
-            drawText(commands, title, pageWidth / 2, 552, { size: 20, bold: true, align: "center", color: type === "admin" ? "#c2410c" : "#0f766e", maxChars: 70 });
-            drawText(commands, `${date.display} dagi ${number}-sonli`, pageWidth / 2, 530, { size: 10, bold: true, align: "center", color: "#334155", maxChars: 90 });
-            drawText(commands, contractReferenceText(contract, order.createdAt || order.date), pageWidth / 2, 512, { size: 9, align: "center", color: "#475569", maxChars: 110 });
-
-            drawInvoiceParty(commands, "Yetkazib beruvchi", supplier, margin, 488, 370);
-            drawInvoiceParty(commands, "Sotib oluvchi", customer, margin + 400, 488, 370);
-
-            drawRect(commands, margin, 354, tableWidth, 38, { fill: "#f8fafc", color: "#dbe4ee" });
-            drawText(commands, "Buyurtma", margin + 12, 376, { size: 8, bold: true, color: "#64748b" });
-            drawText(commands, `#${order.id}`, margin + 12, 362, { size: 8.4, bold: true, color: "#111827", maxChars: 28 });
-            drawText(commands, "Holat", margin + 186, 376, { size: 8, bold: true, color: "#64748b" });
-            drawText(commands, statusBadge(order.status).replace(/<[^>]+>/g, ""), margin + 186, 362, { size: 8.4, bold: true, color: "#111827", maxChars: 30 });
-            drawText(commands, type === "admin" ? "Komissiya muddati" : "To'lov muddati", margin + 360, 376, { size: 8, bold: true, color: "#64748b" });
-            drawText(commands, type === "admin" ? (order.commissionDueAt ? formatDateTime(order.commissionDueAt) : `${COMMISSION_PAYMENT_DAYS} kun`) : (order.buyerPaymentDueAt ? formatDateTime(order.buyerPaymentDueAt) : `${BUYER_PAYMENT_DAYS} kun`), margin + 360, 362, { size: 8.4, bold: true, color: "#111827", maxChars: 36 });
-            drawText(commands, "Jami", margin + 568, 376, { size: 8, bold: true, color: "#64748b" });
-            drawText(commands, money(totals.total), margin + 568, 362, { size: 8.4, bold: true, color: accentDark, maxChars: 36 });
-
-            drawText(commands, "To'lov maqsadi", margin, 334, { size: 9, bold: true, color: accentDark });
-            const purpose = paymentPurposeText({
-                contract,
-                fallbackDate: order.createdAt || order.date,
-                partyName: supplier.name,
-                defaultSuffix: type === "admin" ? "MCHJ" : "XK",
-                serviceText: type === "admin" ? "platforma xizmatlari uchun to'lov" : "yetkazib berilgan mahsulotlar uchun to'lov"
-            });
-            drawText(commands, purpose, margin + 86, 334, { size: 8.3, maxChars: 118, color: "#475569", maxLines: 2 });
-
-            const columns = [
-                { title: "N", width: 26, align: "center" },
-                { title: "Mahsulot nomi (xizmatlar)", width: 178 },
-                { title: "MXIK / katalog", width: 138 },
-                { title: "O'lchov", width: 48, align: "center" },
-                { title: "Miqdor", width: 50, align: "right" },
-                { title: "Narx", width: 74, align: "right" },
-                { title: "QQSsiz", width: 76, align: "right" },
-                { title: "QQS 12%", width: 66, align: "right" },
-                { title: "QQS bilan", width: 114, align: "right" }
-            ];
-            const drawTableHeader = (target, headerY) => {
-                drawRect(target, tableX, headerY, tableWidth, 34, { fill: accent, color: accent });
-                let currentX = tableX;
-                columns.forEach(column => {
-                    drawText(target, column.title, currentX + (column.align === "right" ? column.width - 6 : column.align === "center" ? column.width / 2 : 6), headerY + 20, { size: 7.4, bold: true, color: "#ffffff", align: column.align, maxChars: Math.max(8, Math.floor(column.width / 4)) });
-                    drawLine(target, currentX, headerY, currentX, headerY + 34, "#ffffff", 0.35);
-                    currentX += column.width;
-                });
-                drawLine(target, tableX + tableWidth, headerY, tableX + tableWidth, headerY + 34, "#ffffff", 0.35);
-                return headerY - 42;
-            };
-            const drawTableRows = (target, rowList, startIndex, startY) => {
-                let rowY = startY;
-                rowList.forEach((row, index) => {
-                    const rowHeight = 42;
-                    drawRect(target, tableX, rowY, tableWidth, rowHeight, { fill: index % 2 ? "#ffffff" : "#f8fafc", color: "#dbe4ee" });
-                    let currentX = tableX;
-                    const values = [
-                        String(startIndex + index + 1),
-                        row.name,
-                        row.catalog,
-                        row.unit,
-                        String(row.qty),
-                        money(row.price),
-                        money(row.net),
-                        money(row.vat),
-                        money(row.total)
-                    ];
-                    columns.forEach((column, colIndex) => {
-                        const textX = currentX + (column.align === "right" ? column.width - 6 : column.align === "center" ? column.width / 2 : 6);
-                        drawText(target, values[colIndex], textX, rowY + rowHeight - 14, { size: 7.2, bold: colIndex === 1, align: column.align, maxChars: Math.max(8, Math.floor(column.width / 4.4)), maxLines: 2, color: "#111827" });
-                        drawLine(target, currentX, rowY, currentX, rowY + rowHeight, "#dbe4ee", 0.35);
-                        currentX += column.width;
-                    });
-                    drawLine(target, tableX + tableWidth, rowY, tableX + tableWidth, rowY + rowHeight, "#dbe4ee", 0.35);
-                    rowY -= rowHeight;
-                });
-                return rowY;
-            };
-
-            drawTableRows(commands, rows.slice(0, 4), 0, drawTableHeader(commands, 288));
-
-            for (let start = 4; start < rows.length; start += 9) {
-                const pageCommands = [];
-                drawRect(pageCommands, 0, pageHeight - 64, pageWidth, 64, { fill: headerFill, stroke: false });
-                drawText(pageCommands, `${title} - davom`, pageWidth / 2, 552, { size: 18, bold: true, align: "center", color: accentDark, maxChars: 70 });
-                drawText(pageCommands, `${date.display} dagi ${number}-sonli`, pageWidth / 2, 530, { size: 10, bold: true, align: "center", color: "#334155", maxChars: 90 });
-                const chunk = rows.slice(start, start + 9);
-                drawTableRows(pageCommands, chunk, start, drawTableHeader(pageCommands, 486));
-                drawText(pageCommands, `Hujjat ID: ${number}`, margin, 42, { size: 7.8, color: "#64748b" });
-                drawText(pageCommands, `${Math.floor(start / 9) + 2}-sahifa`, pageWidth - margin, 42, { size: 7.8, align: "right", color: "#64748b" });
-                pages.push(pageCommands);
-            }
-
-            const totalsY = 78;
-            drawRect(commands, tableX + 476, totalsY, 294, 72, { fill: "#f8fafc", color: "#cbd5e1" });
-            drawText(commands, "Jami QQSsiz:", tableX + 496, totalsY + 52, { size: 8.5, bold: true });
-            drawText(commands, money(totals.net), tableX + 750, totalsY + 52, { size: 8.5, align: "right" });
-            drawText(commands, "QQS 12%:", tableX + 496, totalsY + 34, { size: 8.5, bold: true });
-            drawText(commands, money(totals.vat), tableX + 750, totalsY + 34, { size: 8.5, align: "right" });
-            drawText(commands, "Jami to'lov uchun:", tableX + 496, totalsY + 14, { size: 9.5, bold: true, color: accentDark });
-            drawText(commands, money(totals.total), tableX + 750, totalsY + 14, { size: 9.5, bold: true, align: "right", color: accentDark });
-
-            drawText(commands, "Rahbar:", margin, 112, { size: 8.5, bold: true });
-            drawLine(commands, margin + 48, 110, margin + 260, 110, "#94a3b8", 0.5);
-            drawText(commands, "Bosh hisobchi:", margin, 88, { size: 8.5, bold: true });
-            drawLine(commands, margin + 78, 86, margin + 260, 86, "#94a3b8", 0.5);
-            drawText(commands, "Qabul qildi:", margin + 310, 112, { size: 8.5, bold: true });
-            drawLine(commands, margin + 380, 110, margin + 620, 110, "#94a3b8", 0.5);
-            drawText(commands, `Hujjat ID: ${number}`, margin, 42, { size: 7.8, color: "#64748b" });
-            drawText(commands, "Elektron shaklda generatsiya qilindi", pageWidth - margin, 42, { size: 7.8, align: "right", color: "#64748b" });
-
-            return createPdfBlobFromPages(pages, pageWidth, pageHeight);
-        }
-
         function sellerPaymentInvoiceBlob(order) {
             return createInvoicePdfBlob(order, "seller");
         }
@@ -1391,7 +1252,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function sellerInvoiceButton(order, label = "Mahsulot to'lovi PDF") {
-            if (!sellerInvoiceAvailable(order)) return unavailableDocumentLabel(label, "Mahsulot tayyor statusidan keyin ko'rinadi");
+            if (!sellerInvoiceAvailable(order)) return "";
             return `<button class="btn btn-outline" onclick="downloadPaymentInvoice('${order.id}', 'seller')"><i class="ri-file-pdf-line"></i> ${escapeHtml(label)}</button>`;
         }
 
@@ -1419,7 +1280,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 pending_seller_accept: ["Buyurtma berildi", "badge-warning"],
                 seller_accepted: ["Qabul qilindi", "badge-info"],
                 product_ready: ["Mahsulot tayyor", "badge-info"],
-                invoice_generated: ["Hisob-faktura yaratildi", "badge-warning"],
+                invoice_generated: ["Mahsulot tayyor", "badge-info"],
                 dispatched: ["Yetkazishga berildi", "badge-info"],
                 delivered: ["Yetkazildi", "badge-info"],
                 buyer_accepted: ["Qabul qilindi", "badge-success"],
@@ -2318,7 +2179,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             const f = STATE.filters.orders;
             const orders = DB.orders.filter(order => {
                 const haystack = normalize([order.id, userById(order.sellerId).name, userById(order.buyerId).name].join(" "));
-                return (!f.search || haystack.includes(normalize(f.search))) && (f.status === "all" || order.status === f.status);
+                return (!f.search || haystack.includes(normalize(f.search))) && (f.status === "all" || normalizedOrderStatus(order.status) === f.status);
             });
             container.innerHTML = `
                 <div class="card">
@@ -2715,7 +2576,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function orderDeadlineHtml(order) {
-            if (order.status === "buyer_accepted" || (order.status === "invoice_generated" && order.buyerPaymentDueAt)) {
+            if (order.status === "buyer_accepted") {
                 return countdownHtml("Xaridor to'lovi", buyerPaymentDeadline(order), "warning");
             }
             if (order.status === "trade_closed") {
@@ -3044,30 +2905,30 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function orderActions(order) {
+            const status = normalizedOrderStatus(order.status);
             if (STATE.currentUser.role === "seller" && order.sellerId === STATE.currentUser.id) {
-                if (order.status === "pending_seller_accept") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','seller_accepted')">Qabul qildim</button>`;
-                if (order.status === "seller_accepted") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','product_ready')"><i class="ri-checkbox-circle-line"></i> Mahsulot tayyor</button>`;
-                if (order.status === "product_ready") return `<div class="flex gap-2" style="flex-wrap:wrap;">${sellerInvoiceButton(order, "Hisob-faktura") || ""}<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','dispatched')"><i class="ri-truck-line"></i> Yetkazishga berildi</button></div>`;
-                if (order.status === "invoice_generated") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','dispatched')"><i class="ri-truck-line"></i> Yetkazishga berildi</button>`;
-                if (order.status === "dispatched") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','delivered')">Yetkazildi</button>`;
-                if (order.status === "buyer_accepted") return `<div class="flex gap-2" style="flex-wrap:wrap;">${countdownHtml("Xaridor to'lovi", buyerPaymentDeadline(order), "warning")}${sellerInvoiceButton(order, "Hisob-faktura")}${buyerAcceptanceButton(order, "Qabul PDF")}</div>`;
-                if (order.status === "buyer_paid") return `<button class="btn btn-success" onclick="updateOrderStatus('${order.id}','trade_closed')">To'lovni qabul qildim</button>`;
-                if (order.status === "trade_closed") {
+                if (status === "pending_seller_accept") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','seller_accepted')">Qabul qildim</button>`;
+                if (status === "seller_accepted") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','product_ready')"><i class="ri-checkbox-circle-line"></i> Mahsulot tayyor</button>`;
+                if (status === "product_ready") return `<div class="flex gap-2" style="flex-wrap:wrap;">${sellerInvoiceButton(order, "Hisob-faktura") || ""}<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','dispatched')"><i class="ri-truck-line"></i> Yetkazishga berildi</button></div>`;
+                if (status === "dispatched") return `<button class="btn btn-primary" onclick="updateOrderStatus('${order.id}','delivered')">Yetkazildi</button>`;
+                if (status === "buyer_accepted") return `<div class="flex gap-2" style="flex-wrap:wrap;">${countdownHtml("Xaridor to'lovi", buyerPaymentDeadline(order), "warning")}${sellerInvoiceButton(order, "Hisob-faktura")}${buyerAcceptanceButton(order, "Qabul PDF")}</div>`;
+                if (status === "buyer_paid") return `<button class="btn btn-success" onclick="updateOrderStatus('${order.id}','trade_closed')">To'lovni qabul qildim</button>`;
+                if (status === "trade_closed") {
                     return `<button class="btn btn-primary" onclick="openPaymentModal('${order.id}', 'admin')">To'lash (Komissiya)</button>`;
                 }
             }
             if (STATE.currentUser.role === "buyer" && order.buyerId === STATE.currentUser.id) {
-                if (order.status === "product_ready" || order.status === "invoice_generated") {
+                if (status === "product_ready") {
                     return `<div class="flex gap-2" style="flex-wrap:wrap;">${sellerInvoiceButton(order, "Hisob-fakturani ko'rish")}<span class="text-sm text-muted">Yetkazib berish kutilmoqda</span></div>`;
                 }
-                if (order.status === "delivered") {
+                if (status === "delivered") {
                     return `<button class="btn btn-success" onclick="updateOrderStatus('${order.id}','buyer_accepted')">Qabul qildim (Mahsulotni)</button>`;
                 }
-                if (order.status === "buyer_accepted") {
+                if (status === "buyer_accepted") {
                     return `<div class="flex gap-2" style="flex-wrap:wrap;">${countdownHtml("To'lov muddati", buyerPaymentDeadline(order), "warning")}<button class="btn btn-primary" onclick="openPaymentModal('${order.id}', 'seller')">To'lov qilish</button>${buyerAcceptanceButton(order, "Qabul PDF")}</div>`;
                 }
             }
-            if (STATE.currentUser.role === "admin" && order.status === "seller_paid_comm") {
+            if (STATE.currentUser.role === "admin" && status === "seller_paid_comm") {
                 return `<button class="btn btn-success" onclick="confirmCommPayment('${order.id}')">Komissiyani qabul qildim (Yakunlash)</button>`;
             }
             return "";
