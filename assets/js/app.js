@@ -421,7 +421,11 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function legalPartyName(name, defaultSuffix = "XK") {
             const clean = String(name || "").trim();
             if (!clean) return "Kiritilmagan";
-            return /\b(MCHJ|XK|YATT|OOO|AJ|QK|LLC)\b/i.test(clean) ? clean : `${clean} ${defaultSuffix}`;
+            const legalFormPattern = /\b(MCHJ|XK|YATT|OOO|AJ|QK|LLC)\b/i;
+            const match = clean.match(legalFormPattern);
+            const legalForm = (match?.[1] || defaultSuffix).toUpperCase();
+            const partyName = match ? clean.replace(legalFormPattern, "").replace(/\s+/g, " ").trim() : clean;
+            return partyName ? `${legalForm} ${partyName}` : legalForm;
         }
 
         function contractReferenceText(contract, fallbackDate = "") {
