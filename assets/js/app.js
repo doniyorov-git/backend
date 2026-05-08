@@ -440,9 +440,13 @@ const STORAGE_KEY = "myDillerUzStateV2";
             </div>`;
         }
 
+        const INVOICE_VAT_RATE = 0.12;
+
         function pdfSafeText(value) {
             return String(value ?? "")
                 .normalize("NFKD")
+                .replace(/[‘’ʻ`]/g, "'")
+                .replace(/[–—]/g, "-")
                 .replace(/[^\x20-\x7E]/g, "?")
                 .replace(/\s+/g, " ")
                 .trim();
@@ -469,29 +473,155 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return lines.length ? lines : [""];
         }
 
-        function createSimplePdfBlob(title, lines) {
+        function pdfMoney(amount) {
+            return `${new Intl.NumberFormat("uz-UZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount) || 0)} UZS`;
+        }
+
+        function invoiceVatParts(grossAmount) {
+            const gross = Number(grossAmount) || 0;
+            const base = gross / (1 + INVOICE_VAT_RATE);
+            return { base, vat: gross - base, gross };
+        }
+
+        function invoiceNumber(order, type) {
+            const suffix = type === "admin" ? "COMM" : "INV";
+            return `${suffix}-${String(order.id || "").replace(/[^A-Za-z0-9-]/g, "").toUpperCase()}`;
+        }
+
+        function invoiceDateText(value) {
+            return (formatDateTime(value || today()) || today()).split(" ")[0];
+        }
+
+        function createInvoicePdfBlob(invoice) {
             const pageWidth = 595;
-            let y = 800;
-            const commands = ["BT"];
-            commands.push(`/F1 16 Tf 1 0 0 1 50 ${y} Tm (${pdfEscape(title)}) Tj`);
-            y -= 30;
-            lines.forEach(entry => {
-                const text = typeof entry === "string" ? entry : entry.text;
-                const size = typeof entry === "string" ? 10 : (entry.size || 10);
-                const gap = typeof entry === "string" ? 15 : (entry.gap || 15);
-                wrapPdfText(text, size >= 12 ? 70 : 86).forEach(line => {
-                    if (y < 60) return;
-                    commands.push(`/F1 ${size} Tf 1 0 0 1 50 ${y} Tm (${pdfEscape(line)}) Tj`);
-                    y -= gap;
-                });
+            const commands = [];
+            const pageLeft = 36;
+            const pageRight = 559;
+            const contentWidth = pageRight - pageLeft;
+            const color = {
+                primary: "0.07 0.24 0.47",
+                primaryLight: "0.90 0.95 1.00",
+                border: "0.70 0.76 0.84",
+                text: "0.10 0.12 0.16",
+                muted: "0.38 0.43 0.50",
+                white: "1 1 1",
+                total: "0.93 0.98 0.94"
+            };
+
+            const fillRect = (x, y, w, h, fill) => commands.push(`${fill} rg ${x} ${y} ${w} ${h} re f`);
+            const strokeRect = (x, y, w, h, stroke = color.border) => commands.push(`${stroke} RG 0.6 w ${x} ${y} ${w} ${h} re S`);
+            const line = (x1, y1, x2, y2, stroke = color.border, width = 0.6) => commands.push(`${stroke} RG ${width} w ${x1} ${y1} m ${x2} ${y2} l S`);
+            const text = (x, y, value, size = 9, bold = false, fill = color.text) => {
+                commands.push(`${fill} rg BT /${bold ? "F2" : "F1"} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${pdfEscape(value)}) Tj ET`);
+            };
+            const wrappedText = (x, y, value, maxChars, size = 8, bold = false, fill = color.text, gap = 10, limit = 3) => {
+                const lines = wrapPdfText(value, maxChars).slice(0, limit);
+                lines.forEach((lineText, index) => text(x, y - index * gap, lineText, size, bold, fill));
+                return y - lines.length * gap;
+            };
+            const partyBox = (x, y, w, h, title, party) => {
+                fillRect(x, y + h - 20, w, 20, color.primaryLight);
+                strokeRect(x, y, w, h);
+                text(x + 10, y + h - 14, title, 10, true, color.primary);
+                wrappedText(x + 10, y + h - 35, party.name || "Kiritilmagan", 38, 9, true, color.text, 10, 2);
+                text(x + 10, y + 38, `STIR: ${party.inn || "Kiritilmagan"}`, 8, false, color.muted);
+                text(x + 10, y + 26, `H/r: ${party.account || "Kiritilmagan"}`, 8, false, color.muted);
+                text(x + 10, y + 14, `MFO: ${party.mfo || "Kiritilmagan"}`, 8, false, color.muted);
+            };
+
+            fillRect(pageLeft, 770, contentWidth, 42, color.primary);
+            text(pageLeft + 16, 795, "HISOBVARAQ-FAKTURA", 18, true, color.white);
+            text(pageLeft + 16, 780, invoice.subtitle || "QQS 12% bilan", 9, false, color.white);
+            text(430, 795, invoice.number, 10, true, color.white);
+            text(430, 780, `Sana: ${invoice.date}`, 9, false, color.white);
+
+            fillRect(pageLeft, 735, contentWidth, 24, "0.97 0.98 1.00");
+            strokeRect(pageLeft, 735, contentWidth, 24);
+            wrappedText(pageLeft + 10, 746, invoice.contractText || "Shartnomaga asosan", 112, 8, false, color.muted, 9, 1);
+
+            partyBox(pageLeft, 625, 250, 95, "YETKAZIB BERUVCHI", invoice.supplier);
+            partyBox(309, 625, 250, 95, "SOTIB OLUVCHI", invoice.buyer);
+
+            const columns = [
+                { label: "No", x: pageLeft, w: 24 },
+                { label: "Mahsulot/xizmat nomi", x: 60, w: 170 },
+                { label: "Birlik", x: 230, w: 42 },
+                { label: "Miqdor", x: 272, w: 42 },
+                { label: "Narx", x: 314, w: 62 },
+                { label: "QQSsiz", x: 376, w: 62 },
+                { label: "QQS 12%", x: 438, w: 56 },
+                { label: "Jami", x: 494, w: 65 }
+            ];
+            const tableTop = 590;
+            const headerH = 24;
+            const rowH = 34;
+            fillRect(pageLeft, tableTop - headerH, contentWidth, headerH, color.primary);
+            columns.forEach(column => {
+                text(column.x + 4, tableTop - 16, column.label, 7.5, true, color.white);
+                line(column.x, tableTop, column.x, tableTop - headerH, "1 1 1", 0.4);
             });
-            commands.push("ET");
+            line(pageRight, tableTop, pageRight, tableTop - headerH, "1 1 1", 0.4);
+
+            let y = tableTop - headerH;
+            const items = invoice.items.length ? invoice.items : [{ name: "Xizmat", unit: "dona", qty: 1, price: invoice.total, gross: invoice.total }];
+            const visibleItems = items.slice(0, 9);
+            visibleItems.forEach((item, index) => {
+                const rowY = y - rowH;
+                const parts = invoiceVatParts(item.gross);
+                fillRect(pageLeft, rowY, contentWidth, rowH, index % 2 ? "0.99 0.99 1.00" : "1 1 1");
+                strokeRect(pageLeft, rowY, contentWidth, rowH);
+                columns.forEach(column => line(column.x, rowY + rowH, column.x, rowY, color.border, 0.35));
+                line(pageRight, rowY + rowH, pageRight, rowY, color.border, 0.35);
+                text(pageLeft + 8, rowY + 19, String(index + 1), 8, true);
+                wrappedText(64, rowY + 22, item.name, 32, 7.2, false, color.text, 8, 2);
+                text(234, rowY + 19, item.unit || "dona", 7.2);
+                text(278, rowY + 19, String(item.qty || 1), 7.2);
+                text(318, rowY + 19, pdfMoney(item.price), 6.7);
+                text(380, rowY + 19, pdfMoney(parts.base), 6.7);
+                text(443, rowY + 19, pdfMoney(parts.vat), 6.7);
+                text(499, rowY + 19, pdfMoney(parts.gross), 6.7, true);
+                y = rowY;
+            });
+
+            if (items.length > visibleItems.length) {
+                const rowY = y - 22;
+                strokeRect(pageLeft, rowY, contentWidth, 22);
+                text(pageLeft + 10, rowY + 8, `Yana ${items.length - visibleItems.length} ta qator mavjud`, 8, false, color.muted);
+                y = rowY;
+            }
+
+            const totals = invoiceVatParts(invoice.total);
+            const totalsY = y - 92;
+            fillRect(346, totalsY, 213, 78, color.total);
+            strokeRect(346, totalsY, 213, 78);
+            text(360, totalsY + 58, "Jami QQSsiz:", 9, false, color.muted);
+            text(470, totalsY + 58, pdfMoney(totals.base), 9, true);
+            text(360, totalsY + 38, "QQS 12%:", 9, false, color.muted);
+            text(470, totalsY + 38, pdfMoney(totals.vat), 9, true);
+            line(360, totalsY + 28, 545, totalsY + 28, color.border);
+            text(360, totalsY + 12, "Jami to'lov:", 11, true, color.primary);
+            text(460, totalsY + 12, pdfMoney(totals.gross), 11, true, color.primary);
+
+            text(pageLeft, totalsY + 62, "To'lov maqsadi:", 9, true, color.primary);
+            wrappedText(pageLeft, totalsY + 48, invoice.purpose, 58, 8, false, color.text, 10, 4);
+            text(pageLeft, totalsY - 8, `Jami to'lov uchun: ${pdfMoney(totals.gross)}. QQS 12% bilan.`, 9, true);
+
+            const signY = 72;
+            strokeRect(pageLeft, signY, 250, 58);
+            strokeRect(309, signY, 250, 58);
+            text(pageLeft + 10, signY + 38, "Rahbar / mas'ul:", 9, true, color.primary);
+            text(pageLeft + 10, signY + 14, invoice.supplier.signer || "________________________", 8);
+            text(319, signY + 38, "Qabul qildi:", 9, true, color.primary);
+            text(319, signY + 14, invoice.buyer.signer || "________________________", 8);
+            text(pageLeft, 46, `Hujjat ID: ${invoice.number}. Elektron tizim orqali shakllantirildi.`, 7.5, false, color.muted);
+
             const stream = commands.join("\n");
             const objects = [
                 "<< /Type /Catalog /Pages 2 0 R >>",
                 "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-                `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>`,
+                `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>`,
                 "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+                "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
                 `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`
             ];
             let pdf = "%PDF-1.4\n";
@@ -509,15 +639,18 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return new Blob([pdf], { type: "application/pdf" });
         }
 
-        function orderItemLines(order) {
-            const items = order.items || [];
-            if (!items.length) return ["Mahsulotlar: buyurtma tarkibi topilmadi"];
-            return items.flatMap((item, index) => {
+        function invoiceItemsForOrder(order) {
+            return (order.items || []).map(item => {
                 const product = productById(item.prodId) || {};
-                const name = item.productName || product.name || "Mahsulot";
-                const qty = Number(item.qty || item.quantity || 0);
+                const qty = Number(item.qty || item.quantity || 0) || 1;
                 const price = Number(item.price || product.price || 0);
-                return [`${index + 1}. ${name} - ${qty} ${item.unit || product.unit || "dona"} x ${money(price)} = ${money(qty * price)}`];
+                return {
+                    name: item.productName || product.name || "Mahsulot",
+                    unit: item.unit || product.unit || "dona",
+                    qty,
+                    price,
+                    gross: qty * price
+                };
             });
         }
 
@@ -532,19 +665,29 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 defaultSuffix: "XK",
                 serviceText: "yetkazib berilgan mahsulotlar uchun to'lov"
             });
-            return createSimplePdfBlob(`Hisob-faktura #${order.id}`, [
-                { text: `Sana: ${formatDateTime(order.createdAt || today())}`, size: 10 },
-                { text: `Sotuvchi: ${legalPartyName(seller.name, "XK")}`, size: 12 },
-                `STIR: ${seller.inn || order.sellerInn || "Kiritilmagan"}`,
-                `H/r: ${seller.bankAccount || "Kiritilmagan"}`,
-                `MFO: ${seller.bankMfo || "Kiritilmagan"}`,
-                { text: `Xaridor: ${buyer.name || order.buyer_name || "Kiritilmagan"}`, size: 12 },
-                `Xaridor STIR: ${buyer.inn || order.buyer_inn || "Kiritilmagan"}`,
-                { text: "Mahsulotlar:", size: 12 },
-                ...orderItemLines(order),
-                { text: `Jami to'lov: ${money(order.total)}`, size: 13 },
-                `To'lov maqsadi: ${purpose}`
-            ]);
+            return createInvoicePdfBlob({
+                number: invoiceNumber(order, "seller"),
+                date: invoiceDateText(order.createdAt || order.date),
+                subtitle: "Mahsulot yetkazib berish uchun. QQS stavkasi 12%",
+                contractText: contractReferenceText(orderContract, order.createdAt || order.date),
+                supplier: {
+                    name: legalPartyName(seller.name, "XK"),
+                    inn: seller.inn || order.sellerInn || "Kiritilmagan",
+                    account: seller.bankAccount || "Kiritilmagan",
+                    mfo: seller.bankMfo || "Kiritilmagan",
+                    signer: seller.name || ""
+                },
+                buyer: {
+                    name: legalPartyName(buyer.name || order.buyer_name, "MCHJ"),
+                    inn: buyer.inn || order.buyer_inn || "Kiritilmagan",
+                    account: buyer.bankAccount || "Kiritilmagan",
+                    mfo: buyer.bankMfo || "Kiritilmagan",
+                    signer: buyer.name || order.buyer_name || ""
+                },
+                items: invoiceItemsForOrder(order),
+                total: Number(order.total) || 0,
+                purpose
+            });
         }
 
         function commissionPaymentInvoiceBlob(order) {
@@ -558,17 +701,36 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 defaultSuffix: "MCHJ",
                 serviceText: "platforma xizmatlari uchun to'lov"
             });
-            return createSimplePdfBlob(`Komissiya hisob-faktura #${order.id}`, [
-                { text: `Sana: ${formatDateTime(order.createdAt || today())}`, size: 10 },
-                { text: `Qabul qiluvchi: ${legalPartyName(platform.name, "MCHJ")}`, size: 12 },
-                `INN: ${platform.inn}`,
-                `H/r: ${platform.bankAccount}`,
-                `MFO: ${platform.bankMfo}`,
-                { text: `To'lovchi sotuvchi: ${legalPartyName(seller.name, "XK")}`, size: 12 },
-                `Buyurtma summasi: ${money(order.total)}`,
-                `Komissiya (5%): ${money(order.comm || order.total * 0.05)}`,
-                `To'lov maqsadi: ${purpose}`
-            ]);
+            const commissionTotal = Number(order.comm || order.total * 0.05) || 0;
+            return createInvoicePdfBlob({
+                number: invoiceNumber(order, "admin"),
+                date: invoiceDateText(order.createdAt || order.date),
+                subtitle: "Platforma komissiyasi uchun. QQS stavkasi 12%",
+                contractText: contractReferenceText(commissionContract, order.createdAt || order.date),
+                supplier: {
+                    name: legalPartyName(platform.name, "MCHJ"),
+                    inn: platform.inn,
+                    account: platform.bankAccount,
+                    mfo: platform.bankMfo,
+                    signer: platform.name
+                },
+                buyer: {
+                    name: legalPartyName(seller.name, "XK"),
+                    inn: seller.inn || order.sellerInn || "Kiritilmagan",
+                    account: seller.bankAccount || "Kiritilmagan",
+                    mfo: seller.bankMfo || "Kiritilmagan",
+                    signer: seller.name || ""
+                },
+                items: [{
+                    name: "Platforma xizmatlari uchun komissiya (5%)",
+                    unit: "xizmat",
+                    qty: 1,
+                    price: commissionTotal,
+                    gross: commissionTotal
+                }],
+                total: commissionTotal,
+                purpose
+            });
         }
 
         function invoiceBlobFor(order, type) {
@@ -1237,15 +1399,20 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return includeAll ? [{ value: "all", label: "Barcha holatlar" }, ...options] : options;
         }
 
-        function modal(title, body, footer = `<button class="btn btn-outline" onclick="closeModal()">Yopish</button>`) {
+        function modal(title, body, footer = `<button class="btn btn-outline" onclick="closeModal()">Yopish</button>`, options = {}) {
             document.getElementById("modal-title").innerHTML = title;
             document.getElementById("modal-body").innerHTML = body;
             document.getElementById("modal-footer").innerHTML = footer;
+            const modalContent = document.querySelector("#main-modal .modal-content");
+            if (modalContent) {
+                modalContent.classList.toggle("modal-wide", options.size === "wide");
+            }
             document.getElementById("main-modal").classList.add("active");
         }
 
         function closeModal() {
             document.getElementById("main-modal").classList.remove("active");
+            document.querySelector("#main-modal .modal-content")?.classList.remove("modal-wide");
         }
 
         function statCard(icon, label, value, tone = "text-primary") {
@@ -2238,10 +2405,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     defaultSuffix: "XK",
                     serviceText: "yetkazib berilgan mahsulotlar uchun to'lov"
                 });
-                const body = `<div class="grid-2" style="align-items:start;">
+                const body = `<div class="payment-modal-grid">
                     <div>
                         <div class="text-sm text-muted mb-2">Hisob-faktura PDF ko'rinishi</div>
-                        <iframe src="${previewUrl}" style="width:100%;height:520px;border:1px solid var(--border);border-radius:12px;background:white;"></iframe>
+                        <iframe class="payment-pdf-frame" src="${previewUrl}"></iframe>
                     </div>
                     <div class="card" style="box-shadow:none;background:#f8fafc;padding:2rem;border:1px solid #dbeafe;text-align:center;">
                     <div style="font-size:3.5rem;color:var(--primary);margin-bottom:1rem;"><i class="ri-secure-payment-line"></i></div>
@@ -2261,12 +2428,12 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     <p class="text-xs text-muted mt-4">Hisob-fakturani yuklab olib, bank orqali to'lov qiling va tasdiqlovchi PDF hujjatni yuklang.</p>
                     </div>
                 </div>`;
-                modal("Hisob-faktura va to'lov (Sotuvchiga)", body, `<button class="btn btn-outline" onclick="openOrderDetails('${order.id}')"><i class="ri-arrow-left-line"></i> Orqaga</button><button class="btn btn-outline" onclick="downloadPaymentInvoice('${order.id}', 'seller')"><i class="ri-download-line"></i> PDF yuklab olish</button><button class="btn btn-primary" onclick="submitPaymentProof('${order.id}','seller')"><i class="ri-check-double-line"></i> To'ladim</button>`);
+                modal("Hisob-faktura va to'lov (Sotuvchiga)", body, `<button class="btn btn-outline" onclick="openOrderDetails('${order.id}')"><i class="ri-arrow-left-line"></i> Orqaga</button><button class="btn btn-outline" onclick="downloadPaymentInvoice('${order.id}', 'seller')"><i class="ri-download-line"></i> PDF yuklab olish</button><button class="btn btn-primary" onclick="submitPaymentProof('${order.id}','seller')"><i class="ri-check-double-line"></i> To'ladim</button>`, { size: "wide" });
             } else if (type === "admin") {
-                const body = `<div class="grid-2" style="align-items:start;">
+                const body = `<div class="payment-modal-grid">
                     <div>
                         <div class="text-sm text-muted mb-2">Komissiya hisob-fakturasi PDF ko'rinishi</div>
-                        <iframe src="${previewUrl}" style="width:100%;height:520px;border:1px solid var(--border);border-radius:12px;background:white;"></iframe>
+                        <iframe class="payment-pdf-frame" src="${previewUrl}"></iframe>
                     </div>
                     <div>
                         ${adminCommissionPaymentHtml(order)}
@@ -2274,7 +2441,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                         ${paymentProofLink(order.sellerCommissionProof, "Oldingi komissiya tasdig'i")}
                     </div>
                 </div>`;
-                modal("Komissiya hisob-fakturasi va to'lov", body, `<button class="btn btn-outline" onclick="openOrderDetails('${order.id}')"><i class="ri-arrow-left-line"></i> Orqaga</button><button class="btn btn-outline" onclick="downloadPaymentInvoice('${order.id}', 'admin')"><i class="ri-download-line"></i> PDF yuklab olish</button><button class="btn btn-primary" onclick="submitPaymentProof('${order.id}','admin')"><i class="ri-check-double-line"></i> To'ladim</button>`);
+                modal("Komissiya hisob-fakturasi va to'lov", body, `<button class="btn btn-outline" onclick="openOrderDetails('${order.id}')"><i class="ri-arrow-left-line"></i> Orqaga</button><button class="btn btn-outline" onclick="downloadPaymentInvoice('${order.id}', 'admin')"><i class="ri-download-line"></i> PDF yuklab olish</button><button class="btn btn-primary" onclick="submitPaymentProof('${order.id}','admin')"><i class="ri-check-double-line"></i> To'ladim</button>`, { size: "wide" });
             }
         }
 

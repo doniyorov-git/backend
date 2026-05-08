@@ -1097,6 +1097,25 @@
             box-shadow: 0 24px 70px rgba(15, 23, 42, 0.2);
         }
 
+        .modal-content.modal-wide {
+            width: min(1180px, 96vw);
+        }
+
+        .payment-modal-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.95fr);
+            gap: 1.25rem;
+            align-items: start;
+        }
+
+        .payment-pdf-frame {
+            width: 100%;
+            height: min(72vh, 720px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: white;
+        }
+
         .modal-header,
         .modal-footer {
             padding: 1rem 1.2rem;
@@ -1400,7 +1419,8 @@
             }
 
             .filter-toolbar,
-            .grid-2 {
+            .grid-2,
+            .payment-modal-grid {
                 grid-template-columns: 1fr;
             }
 
