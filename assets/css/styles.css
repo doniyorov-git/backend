@@ -1139,6 +1139,19 @@
             background: white;
         }
 
+        .doc-unavailable {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.55rem 0.8rem;
+            border: 1px dashed var(--border);
+            border-radius: 10px;
+            color: var(--muted);
+            background: #f8fafc;
+            font-size: 0.82rem;
+            font-weight: 700;
+        }
+
         .countdown-pill {
             display: inline-flex;
             align-items: center;
