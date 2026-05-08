@@ -216,7 +216,7 @@ function appFetchProduct(PDO $pdo, $productId) {
         return null;
     }
 
-    $stmt = $pdo->prepare("SELECT id, name, sku, category, price, unit, region, model, prepay_percent, real_days, photo_days FROM products WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, name, sku, mxik_code, category, price, unit, region, model, prepay_percent, real_days, photo_days FROM products WHERE id = ?");
     $stmt->execute([$productId]);
     return $stmt->fetch() ?: null;
 }
@@ -556,6 +556,7 @@ function ensureAppSchema(PDO $pdo) {
     }
 
     $columns = [
+        'mxik_code' => "ALTER TABLE products ADD COLUMN mxik_code VARCHAR(32) NULL AFTER sku",
         'prepay_percent' => "ALTER TABLE products ADD COLUMN prepay_percent DECIMAL(5,2) NULL AFTER model",
         'real_days' => "ALTER TABLE products ADD COLUMN real_days INT DEFAULT 30 AFTER prepay_percent",
         'photo_days' => "ALTER TABLE products ADD COLUMN photo_days INT DEFAULT 15 AFTER real_days",

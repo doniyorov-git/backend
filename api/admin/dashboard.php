@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
     foreach ($orders as &$order) {
         $stmt2 = $pdo->prepare("
-            SELECT oi.*, p.name as product_name, p.unit
+            SELECT oi.*, p.name as product_name, p.unit, p.sku, p.mxik_code, p.category
             FROM order_items oi
             JOIN products p ON oi.product_id = p.id
             WHERE oi.order_id = ?
