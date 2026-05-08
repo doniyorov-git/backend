@@ -735,7 +735,352 @@ const STORAGE_KEY = "myDillerUzStateV2";
             });
         }
 
-        function createInvoicePdfBlob(order, type) {
+        function formatInvoiceMoney(amount) {
+            return new Intl.NumberFormat("ru-RU", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(Number(amount) || 0);
+        }
+
+        function formatInvoiceQuantity(value) {
+            return (Number(value) || 0).toFixed(5);
+        }
+
+        function formatInvoiceDate(value) {
+            const parts = invoiceDateParts(value);
+            return parts.display;
+        }
+
+        function numberToUzCyrillic(value) {
+            let amount = Math.max(0, Math.floor(Number(value) || 0));
+            let tiyin = Math.round(((Number(value) || 0) - amount) * 100);
+            if (tiyin >= 100) {
+                amount += 1;
+                tiyin = 0;
+            }
+            const ones = ["", "бир", "икки", "уч", "тўрт", "беш", "олти", "етти", "саккиз", "тўққиз"];
+            const tens = ["", "ўн", "йигирма", "ўттиз", "қирқ", "эллик", "олтмиш", "етмиш", "саксон", "тўқсон"];
+            const scales = ["", "минг", "миллион", "миллиард", "триллион"];
+            const chunkToWords = chunk => {
+                const parts = [];
+                const hundred = Math.floor(chunk / 100);
+                const ten = Math.floor((chunk % 100) / 10);
+                const one = chunk % 10;
+                if (hundred) parts.push(`${ones[hundred]} юз`);
+                if (ten) parts.push(tens[ten]);
+                if (one) parts.push(ones[one]);
+                return parts.join(" ");
+            };
+            if (!amount) return `Нол сум ${String(tiyin).padStart(2, "0")} тийин`;
+            const parts = [];
+            let rest = amount;
+            let scaleIndex = 0;
+            while (rest > 0) {
+                const chunk = rest % 1000;
+                if (chunk) {
+                    const scale = scales[scaleIndex] ? ` ${scales[scaleIndex]}` : "";
+                    parts.unshift(`${chunkToWords(chunk)}${scale}`);
+                }
+                rest = Math.floor(rest / 1000);
+                scaleIndex += 1;
+            }
+            const text = parts.join(" ");
+            return `${text.charAt(0).toUpperCase()}${text.slice(1)} сум ${String(tiyin).padStart(2, "0")} тийин`;
+        }
+
+        function invoicePartyForTemplate(party, defaultSuffix = "MCHJ") {
+            const normalized = party || {};
+            return {
+                name: legalPartyName(normalized.name, defaultSuffix),
+                address: normalized.address || normalized.region || "Киритилмаган",
+                inn: partyRequisite(normalized, "inn", ""),
+                vatCode: normalized.vatCode || normalized.vat_code || "",
+                bankAccount: partyRequisite(normalized, "bankAccount", ""),
+                bankMfo: partyRequisite(normalized, "bankMfo", ""),
+                director: normalized.director || normalized.name || ""
+            };
+        }
+
+        function invoiceRowDataForTemplate(order, type) {
+            if (type === "admin") {
+                const amount = Number(order.comm || order.total * 0.05);
+                return [{
+                    name: `Platforma vositachilik xizmati, buyurtma #${order.id}`,
+                    catalog: "74900000000000000 - Воситачилик хизматлари",
+                    unit: "xizmat",
+                    qty: 1,
+                    price: amount,
+                    delivery: amount,
+                    total: amount,
+                    origin: "Хизмат"
+                }];
+            }
+
+            return (order.items || []).map(item => {
+                const product = productById(item.prodId) || {};
+                const qty = Number(item.qty || item.quantity || 0);
+                const price = Number(item.price || product.price || 0);
+                const meta = rowProductMeta(item, product);
+                return {
+                    name: item.productName || product.name || "Маҳсулот",
+                    catalog: `${meta.mxikCode || "Киритилмаган"} - ${categoryByValue(item.category || product.category || "other").label}`,
+                    unit: item.unit || product.unit || "dona",
+                    qty,
+                    price,
+                    delivery: qty * price,
+                    total: qty * price,
+                    origin: "Ўзи ишлаб чиқарган"
+                };
+            });
+        }
+
+        function invoiceTotalsForTemplate(rows) {
+            const total = rows.reduce((sum, row) => sum + Number(row.total || 0), 0);
+            return { delivery: total, vat: 0, total };
+        }
+
+        function invoiceTemplateNumber(order, type) {
+            const contract = type === "admin" ? sellerListingContractForOrder(order) : orderContractById(order.id);
+            const contractNo = contractNumber(contract);
+            if (contractNo && contractNo !== "Aniqlanmagan") {
+                return `${contractNo}-${type === "admin" ? "COMM" : "INV"}-${String(order.id || "").replace(/[^a-z0-9]/gi, "").slice(-3).toUpperCase() || "001"}`;
+            }
+            return invoiceNumber(order, type);
+        }
+
+        function invoiceTemplateContractLine(order, type) {
+            const contract = type === "admin" ? sellerListingContractForOrder(order) : orderContractById(order.id);
+            const number = contractNumber(contract);
+            const date = formatInvoiceDate(contract?.signedAt || order.createdAt || order.date);
+            if (number && number !== "Aniqlanmagan") return `${date} даги ${number}-сонли шартномага`;
+            return `${date} даги шартномага`;
+        }
+
+        function invoiceHtmlPage({ order, type, rows, pageIndex, pageCount, allRows }) {
+            const seller = userById(order.sellerId);
+            const buyer = userById(order.buyerId);
+            const platform = platformPaymentParty();
+            const supplier = invoicePartyForTemplate(type === "admin" ? { ...platform, role: "platform" } : seller, type === "admin" ? "MCHJ" : "XK");
+            const customer = invoicePartyForTemplate(type === "admin" ? seller : buyer, type === "admin" ? "XK" : "MCHJ");
+            const documentDate = formatInvoiceDate(order.invoiceGeneratedAt || order.updatedAt || order.createdAt || order.date);
+            const documentNumber = invoiceTemplateNumber(order, type);
+            const totals = invoiceTotalsForTemplate(allRows);
+            const continuation = pageIndex > 0 ? " (давоми)" : "";
+            const cell = value => escapeHtml(value || "");
+            const partyBlock = (title, party, taxLabel) => `
+                <div class="party">
+                    <div class="party-row"><b>${cell(title)}:</b><span>${cell(party.name)}</span></div>
+                    <div class="party-row"><b>Манзил:</b><span>${cell(party.address)}</span></div>
+                    <div class="party-row"><b>${cell(taxLabel)}:</b><span>${cell(party.inn)}</span></div>
+                    <div class="party-row"><b>ҚҚС тўловчининг рўйхатдан ўтиш коди:</b><span>${cell(party.vatCode)}</span></div>
+                    <div class="party-row"><b>Х/Р:</b><span>${cell(party.bankAccount)}</span></div>
+                    <div class="party-row"><b>МФО:</b><span>${cell(party.bankMfo)}</span></div>
+                </div>
+            `;
+            const emptyRows = Math.max(0, 6 - rows.length);
+            const rowHtml = rows.map((row, index) => {
+                const absoluteIndex = pageIndex * 6 + index + 1;
+                return `<tr>
+                    <td>${absoluteIndex}</td>
+                    <td class="left">${cell(row.name)}</td>
+                    <td class="left">${cell(row.catalog)}</td>
+                    <td>${cell(row.unit)}</td>
+                    <td>${formatInvoiceQuantity(row.qty)}</td>
+                    <td>${formatInvoiceMoney(row.price)}</td>
+                    <td>${formatInvoiceMoney(row.delivery)}</td>
+                    <td>ҚҚСсиз</td>
+                    <td>-</td>
+                    <td>${formatInvoiceMoney(row.total)}</td>
+                    <td>${cell(row.origin)}</td>
+                </tr>`;
+            }).join("");
+            const fillerRows = Array.from({ length: emptyRows }, () => `<tr class="filler"><td>&#160;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`).join("");
+            return `<div xmlns="http://www.w3.org/1999/xhtml">
+                    <style>
+                        * { box-sizing: border-box; }
+                        .page { width: 1123px; height: 794px; padding: 28px 34px 24px; background: #fff; color: #111; font-family: "Times New Roman", "DejaVu Serif", serif; overflow: hidden; }
+                        .top { text-align: center; line-height: 1.22; font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+                        .title { font-size: 22px; margin-top: 2px; }
+                        .total-words { font-size: 15px; font-weight: 700; margin: 10px 0 12px; }
+                        .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 10px; font-size: 13px; line-height: 1.16; }
+                        .party { min-height: 132px; }
+                        .party-row { display: grid; grid-template-columns: 190px 1fr; gap: 6px; margin-bottom: 4px; }
+                        .party-row b { font-weight: 700; }
+                        table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11.5px; line-height: 1.12; }
+                        th, td { border: 1px solid #111; padding: 4px 4px; text-align: center; vertical-align: middle; }
+                        th { font-weight: 700; }
+                        td.left, th.left { text-align: left; }
+                        thead tr:first-child th { height: 42px; }
+                        thead tr:nth-child(2) th { height: 21px; font-size: 10.5px; }
+                        tbody tr { height: 43px; }
+                        tbody tr.filler { height: 35px; }
+                        .totals td { height: 27px; font-weight: 700; }
+                        .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; margin-top: 14px; font-size: 13px; line-height: 1.45; }
+                        .signature-line { display: flex; gap: 6px; align-items: baseline; min-height: 23px; }
+                        .signature-line b { min-width: 112px; }
+                        .signature-line span { flex: 1; border-bottom: 1px solid #111; min-height: 17px; }
+                        .footer { position: absolute; left: 34px; right: 34px; bottom: 14px; display: flex; justify-content: space-between; font-size: 10px; color: #333; }
+                        .page-wrap { position: relative; width: 1123px; height: 794px; }
+                    </style>
+                    <div class="page-wrap">
+                        <div class="page">
+                            <div class="top">
+                                <div>${cell(invoiceTemplateContractLine(order, type))}</div>
+                                <div>${cell(documentDate)} даги ${cell(documentNumber)}-сонли${cell(continuation)}</div>
+                                <div class="title">Ҳисобварақ-фактура</div>
+                            </div>
+                            <div class="total-words">Жами тўлов учун: ${cell(numberToUzCyrillic(totals.total))} . ҚҚСсиз .</div>
+                            <div class="parties">
+                                ${partyBlock("Етказиб берувчи", supplier, "Етказиб берувчининг СТИР рақами (СТИР)")}
+                                ${partyBlock("Сотиб олувчи", customer, "Сотиб олувчининг СТИР рақами (СТИР)")}
+                            </div>
+                            <table>
+                                <colgroup>
+                                    <col style="width: 32px" />
+                                    <col style="width: 190px" />
+                                    <col style="width: 190px" />
+                                    <col style="width: 58px" />
+                                    <col style="width: 64px" />
+                                    <col style="width: 86px" />
+                                    <col style="width: 92px" />
+                                    <col style="width: 58px" />
+                                    <col style="width: 76px" />
+                                    <col style="width: 100px" />
+                                    <col style="width: 109px" />
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>№</th>
+                                        <th class="left">Маҳсулот номи (хизматлар)</th>
+                                        <th class="left">Товар (хизмат)лар Ягона электрон миллий каталоги бўйича идентификация коди ва номи</th>
+                                        <th>Ўлчов бирлиги</th>
+                                        <th>Миқдор</th>
+                                        <th>Нарх</th>
+                                        <th>Етказиб бериш қиймати</th>
+                                        <th colspan="2">ҚҚС</th>
+                                        <th>Етказиб беришнинг ҚҚСни ҳисобга олган ҳолда қиймати</th>
+                                        <th>Товарни келиб чиқиши</th>
+                                    </tr>
+                                    <tr>
+                                        <th>1</th><th>2</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rowHtml}${fillerRows}
+                                    ${pageIndex === pageCount - 1 ? `<tr class="totals"><td colspan="6" class="left">Жами</td><td>${formatInvoiceMoney(totals.delivery)}</td><td>ҚҚСсиз</td><td>-</td><td>${formatInvoiceMoney(totals.total)}</td><td></td></tr>` : ""}
+                                </tbody>
+                            </table>
+                            ${pageIndex === pageCount - 1 ? `<div class="signatures">
+                                <div>
+                                    <div class="signature-line"><b>Рахбар:</b><span>${cell(supplier.director)}</span></div>
+                                    <div class="signature-line"><b>Бош ҳисобчи:</b><span></span></div>
+                                    <div class="signature-line"><b>Товар берди:</b><span>${cell(supplier.director)}</span></div>
+                                </div>
+                                <div>
+                                    <div class="signature-line"><b>Рахбар:</b><span>${cell(customer.director)}</span></div>
+                                    <div class="signature-line"><b>Бош ҳисобчи:</b><span></span></div>
+                                    <div class="signature-line"><b>Қабул қилди:</b><span></span></div>
+                                </div>
+                            </div>` : ""}
+                        </div>
+                        <div class="footer"><span>Стандарт</span><span>${pageIndex + 1} / ${pageCount}</span></div>
+                    </div>
+                </div>`;
+        }
+
+        function binaryStringToBytes(value) {
+            const bytes = new Uint8Array(value.length);
+            for (let index = 0; index < value.length; index += 1) {
+                bytes[index] = value.charCodeAt(index) & 0xff;
+            }
+            return bytes;
+        }
+
+        async function renderInvoiceHtmlToJpeg(html, width = 1123, height = 794) {
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject width="100%" height="100%">${html}</foreignObject></svg>`;
+            const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            try {
+                const image = new Image();
+                const loaded = new Promise((resolve, reject) => {
+                    image.onload = resolve;
+                    image.onerror = reject;
+                });
+                image.src = url;
+                await loaded;
+                const scale = 2;
+                const canvas = document.createElement("canvas");
+                canvas.width = width * scale;
+                canvas.height = height * scale;
+                const context = canvas.getContext("2d");
+                context.fillStyle = "#ffffff";
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                return {
+                    data: atob(canvas.toDataURL("image/jpeg", 0.96).split(",")[1]),
+                    width: canvas.width,
+                    height: canvas.height
+                };
+            } finally {
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        function createPdfBlobFromJpegs(images, pageWidth = 842, pageHeight = 595) {
+            const pageIds = images.map((_, index) => 3 + index * 3);
+            const objects = [
+                "<< /Type /Catalog /Pages 2 0 R >>",
+                `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] /Count ${images.length} >>`
+            ];
+            images.forEach((image, index) => {
+                const pageId = 3 + index * 3;
+                const contentId = pageId + 1;
+                const imageId = pageId + 2;
+                const imageName = `Im${index + 1}`;
+                const content = `q\n${pageWidth} 0 0 ${pageHeight} 0 0 cm\n/${imageName} Do\nQ`;
+                objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /${imageName} ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+                objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+                objects.push(`<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${image.data.length} >>\nstream\n${image.data}\nendstream`);
+            });
+
+            let pdf = "%PDF-1.4\n";
+            const offsets = [0];
+            objects.forEach((object, index) => {
+                offsets[index + 1] = pdf.length;
+                pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+            });
+            const xrefOffset = pdf.length;
+            pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+            for (let index = 1; index <= objects.length; index += 1) {
+                pdf += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+            }
+            pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+            return new Blob([binaryStringToBytes(pdf)], { type: "application/pdf" });
+        }
+
+        async function createInvoicePdfBlob(order, type) {
+            const rows = invoiceRowDataForTemplate(order, type);
+            const chunkSize = 6;
+            const chunks = [];
+            for (let index = 0; index < Math.max(rows.length, 1); index += chunkSize) {
+                chunks.push(rows.slice(index, index + chunkSize));
+            }
+            const images = [];
+            for (let index = 0; index < chunks.length; index += 1) {
+                const html = invoiceHtmlPage({
+                    order,
+                    type,
+                    rows: chunks[index],
+                    pageIndex: index,
+                    pageCount: chunks.length,
+                    allRows: rows
+                });
+                images.push(await renderInvoiceHtmlToJpeg(html));
+            }
+            return createPdfBlobFromJpegs(images);
+        }
+
+        function createLegacyInvoicePdfBlob(order, type) {
             const seller = userById(order.sellerId);
             const buyer = userById(order.buyerId);
             const platform = platformPaymentParty();
@@ -1013,7 +1358,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
 
-        function downloadPaymentInvoice(orderId, type) {
+        async function downloadPaymentInvoice(orderId, type) {
             const order = DB.orders.find(item => item.id === orderId);
             if (!order) return;
             if (type === "seller" && !sellerInvoiceAvailable(order)) {
@@ -1029,7 +1374,12 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 return;
             }
             const name = type === "admin" ? `commission-invoice-${order.id}.pdf` : type === "buyer_acceptance" ? `buyer-acceptance-${order.id}.pdf` : `invoice-${order.id}.pdf`;
-            downloadBlob(invoiceBlobFor(order, type), name);
+            try {
+                downloadBlob(await invoiceBlobFor(order, type), name);
+            } catch (error) {
+                console.error("Invoice PDF generation failed", error);
+                showToast("PDF yaratishda xatolik yuz berdi", "danger");
+            }
         }
 
         function paymentProofLink(path, label = "PDF hujjat") {
@@ -2723,7 +3073,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return "";
         }
 
-        function openPaymentModal(orderId, type) {
+        async function openPaymentModal(orderId, type) {
             const order = DB.orders.find(item => item.id === orderId);
             if (!order) return;
             if (type === "seller" && !sellerInvoiceAvailable(order)) {
@@ -2734,8 +3084,15 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 showToast("Komissiya hisob-fakturasi savdo yakunlangandan keyin ochiladi", "warning");
                 return;
             }
-            const blob = invoiceBlobFor(order, type);
-            const previewUrl = URL.createObjectURL(blob);
+            let previewUrl = "";
+            try {
+                const blob = await invoiceBlobFor(order, type);
+                previewUrl = URL.createObjectURL(blob);
+            } catch (error) {
+                console.error("Invoice PDF preview failed", error);
+                showToast("PDF yaratishda xatolik yuz berdi", "danger");
+                return;
+            }
 
             if (type === "seller") {
                 const seller = userById(order.sellerId);
