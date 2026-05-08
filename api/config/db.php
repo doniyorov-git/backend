@@ -256,8 +256,8 @@ function appSellerListingContractHtml(PDO $pdo, $sellerId, $context = []) {
             <p>3.2. Platforma Ishlab chiqaruvchining reyting ko\'rsatkichlari pasaygan taqdirda xizmat ko\'rsatishni vaqtincha to\'xtatish hamda Mijozlar va Ishlab chiqaruvchi o\'rtasidagi to\'lov intizomini nazorat qilish huquqiga ega.</p>
             <h4>4. KOMISSIYA MUKOFOTI VA HISOB-KITOBLAR</h4>
             <p>4.1. Platformaning xizmat haqi Mijoz tomonidan to\'langan tovar qiymatining 5% (besh foiz) miqdorini tashkil etadi.</p>
-            <p>4.2. Platforma xizmatlari uchun hisob-fakturalarni har oy yakunida taqdim etadi.</p>
-            <p>4.3. Ishlab chiqaruvchi komissiya to\'lovini solishtirma dalolatnoma tasdiqlangan kundan boshlab 5 (besh) bank ish kuni ichida Platformaning hisob raqamiga o\'tkazadi.</p>
+            <p>4.2. Savdo yakunlangandan keyin Platforma xizmatlari uchun hisob-faktura generatsiya qilinadi.</p>
+            <p>4.3. Ishlab chiqaruvchi komissiya to\'lovini savdo yakunlangan vaqtdan boshlab 3 (uch) kun ichida Platformaning hisob raqamiga o\'tkazadi.</p>
             <p>4.4. Agar tovar Mijoz tomonidan qaytarilsa, ushbu tovar bo\'yicha hisoblangan komissiya keyingi davr hisob-kitoblarida chegirib qolinadi.</p>
             <h4>5. KAFOLAT VA MOLIYAVIY QO\'LLAB-QUVVATLASH</h4>
             <p>5.1. Platforma Mijozlarning to\'lov qobiliyatini o\'z ichki tizimi orqali tahlil qiladi.</p>
@@ -303,8 +303,8 @@ function appBuyerOrderContractHtml(PDO $pdo, $buyerId, $sellerId, $context = [])
             <p>3.3. Tovar qabul qilinganda Xaridor uning sifati va miqdorini tekshiradi hamda elektron yoki qog\'oz shaklidagi yuk xatini imzolaydi.</p>
             <h4>4. HISOB-KITOB TARTIBI</h4>
             <p>4.1. Tovar narxi Platforma tizimida buyurtma berilgan vaqtdagi narx bo\'yicha belgilanadi.</p>
-            <p>4.2. Xaridor tovar uchun to\'lovni oldindan to\'lov, bo\'lib to\'lash yoki kechiktirilgan to\'lov shaklida amalga oshirishi mumkin.</p>
-            <p>4.3. To\'lovlar naqd pulsiz shaklda, Platformaning tizimida ko\'rsatilgan hisob raqamlariga amalga oshiriladi.</p>
+            <p>4.2. Sotuvchi mahsulot tayyorligini tasdiqlagandan so\'ng hisob-faktura generatsiya qilinadi.</p>
+            <p>4.3. Xaridor hisob-faktura yaratilgan vaqtdan boshlab 10 (o\'n) kun ichida to\'lovni naqd pulsiz shaklda amalga oshiradi.</p>
             <h4>5. PLATFORMANING KAFOLATLARI</h4>
             <p>5.1. Platforma Xaridor va Ishlab chiqaruvchi o\'rtasidagi hisob-kitoblarning shaffofligini ta\'minlaydi.</p>
             <p>5.2. Agar yetkazib berilgan tovar yaroqsiz chiqsa, Xaridor 24 soat ichida Platformaga ariza beradi va Platforma tovarni almashtirish yoki mablag\'ni qaytarish jarayonini muvofiqlashtiradi.</p>
@@ -517,9 +517,18 @@ function ensureAppSchema(PDO $pdo) {
 
     $stmt = $pdo->query("SHOW TABLES LIKE 'orders'");
     if ($stmt->fetchColumn()) {
+        $stmt = $pdo->query("SHOW COLUMNS FROM orders LIKE 'status'");
+        $statusColumn = $stmt->fetch();
+        if ($statusColumn && strpos($statusColumn['Type'], 'invoice_generated') === false) {
+            $pdo->exec("ALTER TABLE orders MODIFY status ENUM('pending_seller_accept', 'seller_accepted', 'product_ready', 'invoice_generated', 'dispatched', 'delivered', 'buyer_accepted', 'buyer_paid', 'trade_closed', 'seller_paid_comm', 'paid') DEFAULT 'pending_seller_accept'");
+        }
+
         $columns = [
             'buyer_payment_proof' => "ALTER TABLE orders ADD COLUMN buyer_payment_proof VARCHAR(255) NULL AFTER dispatch_report",
-            'seller_commission_proof' => "ALTER TABLE orders ADD COLUMN seller_commission_proof VARCHAR(255) NULL AFTER buyer_payment_proof"
+            'seller_commission_proof' => "ALTER TABLE orders ADD COLUMN seller_commission_proof VARCHAR(255) NULL AFTER buyer_payment_proof",
+            'invoice_generated_at' => "ALTER TABLE orders ADD COLUMN invoice_generated_at DATETIME NULL AFTER seller_commission_proof",
+            'buyer_payment_due_at' => "ALTER TABLE orders ADD COLUMN buyer_payment_due_at DATETIME NULL AFTER invoice_generated_at",
+            'commission_due_at' => "ALTER TABLE orders ADD COLUMN commission_due_at DATETIME NULL AFTER buyer_payment_due_at"
         ];
 
         foreach ($columns as $column => $sql) {
