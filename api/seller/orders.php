@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         sendJson(['success' => false, 'message' => 'Missing parameters'], 400);
     }
 
-    $stmt = $pdo->prepare("SELECT seller_commission_proof FROM orders WHERE id = ? AND seller_id = ?");
+    $stmt = $pdo->prepare("SELECT status, seller_commission_proof, commission_due_at FROM orders WHERE id = ? AND seller_id = ?");
     $stmt->execute([$orderId, $sellerId]);
     $existingOrder = $stmt->fetch();
     if (!$existingOrder) {
@@ -61,15 +61,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $stmt = $pdo->prepare("UPDATE orders SET status = ?, dispatch_report = ? WHERE id = ? AND seller_id = ?");
         $stmt->execute([$status, $dispatchReport, $orderId, $sellerId]);
     } else if ($commissionProof) {
-        $stmt = $pdo->prepare("UPDATE orders SET status = ?, seller_commission_proof = ?, comm_status = 'pending_admin' WHERE id = ? AND seller_id = ?");
+        $stmt = $pdo->prepare("UPDATE orders SET status = ?, seller_commission_proof = ?, comm_status = 'pending_admin', commission_due_at = COALESCE(commission_due_at, DATE_ADD(NOW(), INTERVAL 3 DAY)) WHERE id = ? AND seller_id = ?");
         $stmt->execute([$status, $commissionProof, $orderId, $sellerId]);
         notifyRole($pdo, 'admin', 'Komissiya tasdiq kutmoqda', '#' . $orderId . ' buyurtma komissiyasi tekshiruvga yuborildi.', 'warning', 'admin-comm');
     } else {
-        $stmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ? AND seller_id = ?");
-        $stmt->execute([$status, $orderId, $sellerId]);
+        if ($status === 'invoice_generated') {
+            $stmt = $pdo->prepare("UPDATE orders SET status = ?, invoice_generated_at = COALESCE(invoice_generated_at, NOW()), buyer_payment_due_at = COALESCE(buyer_payment_due_at, DATE_ADD(NOW(), INTERVAL 10 DAY)) WHERE id = ? AND seller_id = ?");
+            $stmt->execute([$status, $orderId, $sellerId]);
+        } elseif ($status === 'trade_closed') {
+            $stmt = $pdo->prepare("UPDATE orders SET status = ?, commission_due_at = COALESCE(commission_due_at, DATE_ADD(NOW(), INTERVAL 3 DAY)) WHERE id = ? AND seller_id = ?");
+            $stmt->execute([$status, $orderId, $sellerId]);
+        } else {
+            $stmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ? AND seller_id = ?");
+            $stmt->execute([$status, $orderId, $sellerId]);
+        }
         
         if ($status === 'seller_paid_comm') {
-            $stmt = $pdo->prepare("UPDATE orders SET comm_status = 'pending_admin' WHERE id = ? AND seller_id = ?");
+            $stmt = $pdo->prepare("UPDATE orders SET comm_status = 'pending_admin', commission_due_at = COALESCE(commission_due_at, DATE_ADD(NOW(), INTERVAL 3 DAY)) WHERE id = ? AND seller_id = ?");
             $stmt->execute([$orderId, $sellerId]);
             notifyRole($pdo, 'admin', 'Komissiya tasdiq kutmoqda', '#' . $orderId . ' buyurtma komissiyasi tekshiruvga yuborildi.', 'warning', 'admin-comm');
         }
@@ -80,6 +88,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $buyerId = $stmt->fetchColumn();
     if ($buyerId) {
         createNotification($pdo, $buyerId, 'Buyurtma holati yangilandi', '#' . $orderId . ' buyurtma holati: ' . $status, 'info', 'buyer-orders');
+        if ($status === 'invoice_generated') {
+            createNotification($pdo, $buyerId, 'Hisob-faktura yaratildi', '#' . $orderId . ' buyurtma uchun hisob-faktura yaratildi. To\'lov muddati: 10 kun.', 'warning', 'buyer-orders');
+        }
     }
     
     sendJson(['success' => true]);
