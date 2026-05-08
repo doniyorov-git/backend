@@ -384,7 +384,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function orderContractById(orderId) {
-            return DB.contracts.find(contract => contract.contractType === "buyer_order" && contract.orderId === orderId);
+            const direct = DB.contracts.find(contract => contract.contractType === "buyer_order" && contract.orderId === orderId);
+            if (direct) return direct;
+            const order = DB.orders.find(item => item.id === orderId);
+            return order ? DB.contracts.find(contract => contract.contractType === "buyer_order" && contract.signerId === order.buyerId) : null;
         }
 
         function sellerListingContractForOrder(order) {
