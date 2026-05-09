@@ -231,130 +231,164 @@ function appFetchOrder(PDO $pdo, $orderId) {
     return $stmt->fetch() ?: null;
 }
 
+function appContractDocumentHtml(array $lines) {
+    $html = '<div class="contract-document">';
+    foreach ($lines as $line) {
+        if (strpos($line, 'TITLE:') === 0) {
+            $html .= '<h3>' . appEscape(substr($line, 6)) . '</h3>';
+        } elseif (strpos($line, 'SECTION:') === 0) {
+            $html .= '<h4>' . appEscape(substr($line, 8)) . '</h4>';
+        } elseif ($line === '') {
+            $html .= '<div class="contract-spacer"></div>';
+        } else {
+            $html .= '<p>' . appEscape($line) . '</p>';
+        }
+    }
+    return $html . '</div>';
+}
+
+function appSellerRegisterContractLines() {
+    return [
+        "TITLE:HAMKORLIK VA XIZMAT KO'RSATISH SHARTNOMASI No. 1",
+        "\"___\" ________ 2026 y.    Andijon sh.",
+        "SECTION:1. SHARTNOMA TOMONLARI",
+        "1.1. \"RoboTexnika\" MCHJ, keyingi o'rinlarda \"Platforma\" deb yuritiladi, direktor Mirzayev Sardor (Ustav asosida) nomidan bir tomondan, va",
+        "1.2. \"________________\", keyingi o'rinlarda \"Ishlab chiqaruvchi\" deb yuritiladi, direktor ________________ (Ustav asosida) nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
+        "SECTION:2. SHARTNOMA PREDMETI",
+        "2.1. Platforma Ishlab chiqaruvchining tovarlarini chakana savdo nuqtalariga (Mijozlarga) sotishda vositachilik va axborot-texnologik xizmatlarini ko'rsatadi.",
+        "2.2. Platforma quyidagi majburiyatlarni oladi:",
+        "- Mijozlar bazasini shakllantirish va tovarni targ'ib qilish;",
+        "- Sotuvlar, yetkazib berish va to'lovlarning elektron hisobini yuritish;",
+        "- Ishlab chiqaruvchiga bozor tahlili va reyting ko'rsatkichlarini taqdim etish;",
+        "- Shartnomaning 5-bandiga muvofiq kafolatli hisob-kitoblarni ta'minlash.",
+        "SECTION:3. TOMONLARNING HUQUQ VA MAJBURIYATLARI",
+        "3.1. Ishlab chiqaruvchining majburiyatlari:",
+        "- Tovarlarning sifati va amaldagi standartlarga (sertifikatlarga) mosligini ta'minlash;",
+        "- Platforma orqali kelgan buyurtmalarni o'z vaqtida va to'liq hajmda yetkazib berish;",
+        "- Tovar qoldiqlari va narxlar o'zgarishi haqida Platformani zudlik bilan xabardor qilish.",
+        "3.2. Platformaning huquqlari:",
+        "- Ishlab chiqaruvchining reyting ko'rsatkichlari pasaygan taqdirda xizmat ko'rsatishni vaqtincha to'xtatish;",
+        "- Mijozlar va Ishlab chiqaruvchi o'rtasidagi to'lov intizomini nazorat qilish.",
+        "SECTION:4. KOMISSIYA MUKOFOTI VA HISOB-KITOBLAR",
+        "4.1. Platformaning xizmat haqi (komissiya) Mijoz tomonidan to'langan tovar qiymatining 5% (besh foiz) miqdorini tashkil etadi.",
+        "4.2. Platforma xizmatlari uchun hisob-fakturalarni (EHF) har oy yakunida taqdim etadi.",
+        "4.3. Ishlab chiqaruvchi komissiya to'lovini solishtirma dalolatnoma tasdiqlangan kundan boshlab 5 (besh) bank ish kuni ichida Platformaning hisob raqamiga o'tkazadi.",
+        "4.4. Agar tovar Mijoz tomonidan qaytarilsa, ushbu tovar bo'yicha hisoblangan komissiya keyingi davr hisob-kitoblarida chegirib qolinadi.",
+        "SECTION:5. KAFOLAT VA MOLIYAVIY QO'LLAB-QUVVATLASH",
+        "5.1. Platforma Mijozlarning to'lov qobiliyatini o'z ichki tizimi orqali tahlil qiladi.",
+        "5.2. Platforma va Ishlab chiqaruvchi o'rtasidagi alohida kelishuvga asosan, Platforma Mijozning muddati o'tgan debitorlik qarzdorligini vaqtinchalik (faktoring yoki kafolat sifatida) qoplab berishi mumkin.",
+        "5.3. Platforma tomonidan qoplangan mablag' Mijozdan undirilgandan so'ng yoki kelishilgan muddatda Platformaga qaytariladi.",
+        "SECTION:6. REYTING VA ELEKTRON TIZIM",
+        "6.1. Barcha oldi-sotdi operatsiyalari Platformaning dasturiy ta'minoti orqali qayd etiladi. Ushbu tizim ma'lumotlari hisob-kitob uchun asos hisoblanadi.",
+        "6.2. Ishlab chiqaruvchining reytingi quyidagilarga ta'sir qiladi:",
+        "- Platforma tomonidan beriladigan kafolat limitlariga;",
+        "- Tovarlarning tizimda ko'rinish ustuvorligiga (priority).",
+        "SECTION:7. FORS-MAJOR VA JAVOBGARLIK",
+        "7.1. Tomonlar o'z majburiyatlarini bajarmagan taqdirda O'zbekiston Respublikasi qonunchiligiga muvofiq javobgar bo'ladilar.",
+        "7.2. Yetkazib berilgan tovarning sifati, yaroqlilik muddati va qadoqlanishi uchun to'liq javobgarlik Ishlab chiqaruvchi zimmasida bo'ladi.",
+        "SECTION:8. NIZOLARNI HAL ETISH",
+        "8.1. Barcha kelishmovchiliklar muzokaralar yo'li bilan hal etiladi.",
+        "8.2. Kelishuvga erishilmagan taqdirda, nizo Platforma joylashgan hududdagi iqtisodiy sudda ko'rib chiqiladi.",
+        "SECTION:9. YAKUNIY QOIDALAR",
+        "9.1. Shartnoma imzolangan kundan boshlab 12 oy davomida amal qiladi. Agar tomonlardan biri muddat tugashidan 30 kun avval bekor qilish haqida yozma xabar bermasa, shartnoma keyingi muddatga avtomatik uzaytiriladi.",
+        "9.2. Mazkur shartnoma ikki nusxada tuzildi."
+    ];
+}
+
+function appBuyerRegisterContractLines() {
+    return [
+        "TITLE:MAHSULOT YETKAZIB BERISH VA XIZMAT KO'RSATISH SHARTNOMASI No.___",
+        "\"___\" ________ 2026 y.     Andijon sh.",
+        "SECTION:1. SHARTNOMA TOMONLARI",
+        "1.1. \"RoboTexnika\" MCHJ, keyingi o'rinlarda \"Platforma\" deb yuritiladi, direktor Mirzayev Sardor nomidan, va",
+        "1.2. ________________, keyingi o'rinlarda \"Xaridor\" deb yuritiladi, direktor (yoki YATT) ________________ nomidan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
+        "SECTION:2. SHARTNOMA PREDMETI",
+        "2.1. Platforma Xaridorga tizimdagi Ishlab chiqaruvchilarning mahsulotlarini tanlash, buyurtma berish va yetkazib berishni tashkil qilish xizmatlarini ko'rsatadi.",
+        "2.2. Xaridor Platforma orqali buyurtma qilingan tovarlarni qabul qilish va ularning haqini belgilangan muddatlarda to'lash majburiyatini oladi.",
+        "SECTION:3. BUYURTMA VA YETKAZIB BERISH TARTIBI",
+        "3.1. Xaridor buyurtmani Platformaning elektron tizimi (ilova yoki sayt) orqali amalga oshiradi.",
+        "3.2. Tovarlar Xaridorning savdo nuqtasiga Ishlab chiqaruvchi yoki Platformaning logistika hamkorlari tomonidan yetkaziladi.",
+        "3.3. Tovar qabul qilinganda Xaridor uning sifati va miqdorini tekshirib, elektron yoki qog'oz shaklidagi yuk xatini (tovar-transport nakladnoyini) imzolaydi.",
+        "SECTION:4. HISOB-KITOB TARTIBI",
+        "4.1. Tovar narxi Platforma tizimida buyurtma berilgan vaqtdagi narx bo'yicha belgilanadi.",
+        "4.2. Xaridor tovar uchun to'lovni quyidagi shaklda amalga oshirishi mumkin:",
+        "- Oldindan to'lov (100%);",
+        "- Bo'lib to'lash yoki kechiktirilgan to'lov (Platforma tomonidan belgilangan limit va reyting asosida).",
+        "4.3. To'lovlar naqd pulsiz shaklda, Platformaning tizimida ko'rsatilgan hisob raqamlariga amalga oshiriladi.",
+        "SECTION:5. PLATFORMANING KAFOLATLARI",
+        "5.1. Platforma Xaridor va Ishlab chiqaruvchi o'rtasidagi hisob-kitoblarning shaffofligini ta'minlaydi.",
+        "5.2. Agar yetkazib berilgan tovar yaroqsiz (brak) chiqsa, Xaridor 24 soat ichida Platformaga ariza beradi va Platforma tovarni almashtirish yoki mablag'ni qaytarish jarayonini muvofiqlashtiradi.",
+        "5.3. Xaridor to'lovlarni o'z vaqtida amalga oshirsa, Platforma unga \"Ishonchli Xaridor\" maqomini va tovarlarni kechiktirib to'lash (kredit liniyasi) limitlarini taqdim etadi.",
+        "SECTION:6. TOMONLARNING JAVOBGARLIGI",
+        "6.1. To'lov kechiktirilganda: Xaridor to'lov kechiktirilgan har bir kun uchun to'lanmagan summaning 0,1% miqdorida penya to'laydi, lekin bu jami summaning 10%idan oshmasligi kerak.",
+        "6.2. Mahsulotning sifati uchun bevosita Ishlab chiqaruvchi javobgar hisoblanadi, biroq Platforma nizoli vaziyatlarni hal qilishda Xaridor manfaatlarini himoya qilishga ko'maklashadi.",
+        "SECTION:7. REYTING TIZIMI",
+        "7.1. Xaridorning to'lov intizomi asosida Platformada uning shaxsiy reytingi yuritiladi.",
+        "7.2. Past reyting Xaridor uchun kechiktirib to'lash imkoniyatining yopilishiga va buyurtmalarning cheklanishiga sabab bo'lishi mumkin.",
+        "SECTION:8. SHARTNOMANING AMAL QILISHI",
+        "8.1. Shartnoma imzolangan kundan boshlab 12 oy davomida amal qiladi.",
+        "8.2. Shartnoma Platformaning elektron tizimida \"Ofertani qabul qilish\" tugmasini bosish orqali ham tuzilishi mumkin va u yuridik kuchga ega."
+    ];
+}
+
+function appBuyerOrderContractLines() {
+    return [
+        "TITLE:MAHSULOT OLDI-SOTDI SHARTNOMASI No.___",
+        "\"___\" ________ 2026 y.",
+        "SECTION:1. SHARTNOMA TOMONLARI",
+        "1.1. \"________________\" (keyingi o'rinlarda - Sotuvchi), direktor ________________ nomidan bir tomondan, va",
+        "1.2. \"________________\" (keyingi o'rinlarda - Xaridor), direktor ________________ nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
+        "SECTION:2. SHARTNOMA PREDMETI",
+        "2.1. Sotuvchi o'zi ishlab chiqargan mahsulotlarni Xaridorga mulk qilib topshirish, Xaridor esa mahsulotlarni qabul qilish va haqini to'lash majburiyatini oladi.",
+        "2.2. Mazkur shartnoma doirasidagi barcha buyurtmalar, tovarlar ro'yxati va ularning narxi \"My-Diler.uz\" elektron platformasi (keyingi o'rinlarda - Platforma) orqali rasmiylashtiriladi.",
+        "SECTION:3. TO'LOV SHARTLARI",
+        "3.1. Mahsulotlarning narxi Platformada buyurtma berilgan vaqtda belgilangan amaldagi preyskurant bo'yicha hisoblanadi.",
+        "3.2. To'lov shartlari (oldindan to'lov, bo'lib to'lash yoki kechiktirib to'lash) va muddatlari Platformada belgilangan tartibda va miqdorda amalga oshiriladi.",
+        "3.3. Xaridor tomonidan to'lovlar Platformaning texnik imkoniyatlari va hisob-kitob tizimidan foydalangan holda amalga oshirilishi mumkin.",
+        "SECTION:4. YETKAZIB BERISH TARTIBI",
+        "4.1. Mahsulotlarni yetkazib berish xizmati va shartlari Platforma tomonidan belgilangan logistika qoidalariga asosan amalga oshiriladi.",
+        "4.2. Yetkazib berish muddati Platformadagi elektron buyurtma tasdiqlangan vaqtdan boshlab hisoblanadi.",
+        "4.3. Mahsulot Xaridor tomonidan qabul qilib olingan vaqtda elektron yuk xati (EHF yoki Platforma dalolatnomasi) tasdiqlangan paytdan boshlab mahsulotga bo'lgan mulk huquqi Xaridorga o'tadi.",
+        "SECTION:5. MAHSULOT SIFATI VA KAFOLATI",
+        "5.1. Sotuvchi mahsulotning sifati O'zbekiston Respublikasi standartlariga va Platformada ko'rsatilgan tavsiflarga mos kelishiga kafolat beradi.",
+        "5.2. Yashirin nuqsonlar yoki yaroqsiz (brak) mahsulotlar aniqlangan taqdirda, Xaridor Platformaning da'volar bilan ishlash tartibiga muvofiq mahsulotni almashtirishni talab qilish huquqiga ega.",
+        "SECTION:6. TOMONLARNING JAVOBGARLIGI",
+        "6.1. Tomonlar majburiyatlarini bajarmagan taqdirda O'zbekiston Respublikasining amaldagi qonunchiligi va Platformaning ichki qoidalariga muvofiq javobgar bo'ladilar.",
+        "6.2. Platforma tizimidagi texnik xatoliklar yoki logistikadagi uzilishlar uchun Sotuvchi javobgar hisoblanmaydi (agar ayb Sotuvchida bo'lmasa).",
+        "SECTION:7. YAKUNIY QOIDALAR",
+        "7.1. Platformadagi elektron ma'lumotlar, buyurtmalar tarixi va hisob-kitoblar shartnomaning ajralmas qismi va rasmiy dalil hisoblanadi.",
+        "7.2. Nizolar muzokaralar yo'li bilan, kelishuv bo'lmasa, iqtisodiy sudda ko'rib chiqiladi.",
+        "7.3. Shartnoma tomonlar imzolagan paytdan boshlab 1 yil davomida amal qiladi."
+    ];
+}
+
 function appSellerListingContractHtml(PDO $pdo, $sellerId, $context = []) {
-    $platform = appPlatformParty($pdo);
-    $seller = appFetchUserParty($pdo, $sellerId);
-    $contractMeta = appContractMetaHtml($context['contract_number'] ?? '', $context['contract_signed_at'] ?? '');
-
-    $content = '
-        <div class="contract-document">
-            ' . $contractMeta . '
-            <h4>1. SHARTNOMA TOMONLARI</h4>
-            <p>1.1. "' . appEscape($platform['name']) . '", keyingi o\'rinlarda "Platforma" deb yuritiladi, direktor ' . appEscape($platform['director']) . ' nomidan bir tomondan, va</p>
-            <p>1.2. "' . appEscape(appValue($seller['name'] ?? '')) . '", keyingi o\'rinlarda "Ishlab chiqaruvchi" deb yuritiladi, direktor yoki YATT ' . appEscape(appValue($seller['director'] ?? '', 'Kiritilmagan')) . ' nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to\'g\'risida tuzdilar:</p>
-            <h4>2. SHARTNOMA PREDMETI</h4>
-            <p>2.1. Platforma Ishlab chiqaruvchining tovarlarini chakana savdo nuqtalariga (Mijozlarga) sotishda vositachilik va axborot-texnologik xizmatlarini ko\'rsatadi.</p>
-            <p>2.2. Platforma quyidagi majburiyatlarni oladi:</p>
-            <ul>
-                <li>Mijozlar bazasini shakllantirish va tovarni targ\'ib qilish;</li>
-                <li>Sotuvlar, yetkazib berish va to\'lovlarning elektron hisobini yuritish;</li>
-                <li>Ishlab chiqaruvchiga bozor tahlili va reyting ko\'rsatkichlarini taqdim etish;</li>
-                <li>Shartnomaning 5-bandiga muvofiq kafolatli hisob-kitoblarni ta\'minlash.</li>
-            </ul>
-            <h4>3. TOMONLARNING HUQUQ VA MAJBURIYATLARI</h4>
-            <p>3.1. Ishlab chiqaruvchi tovarlarning sifati va amaldagi standartlarga mosligini ta\'minlaydi, Platforma orqali kelgan buyurtmalarni o\'z vaqtida va to\'liq hajmda yetkazib beradi, tovar qoldiqlari va narxlar o\'zgarishi haqida Platformani zudlik bilan xabardor qiladi.</p>
-            <p>3.2. Platforma Ishlab chiqaruvchining reyting ko\'rsatkichlari pasaygan taqdirda xizmat ko\'rsatishni vaqtincha to\'xtatish hamda Mijozlar va Ishlab chiqaruvchi o\'rtasidagi to\'lov intizomini nazorat qilish huquqiga ega.</p>
-            <h4>4. KOMISSIYA MUKOFOTI VA HISOB-KITOBLAR</h4>
-            <p>4.1. Platformaning xizmat haqi Mijoz tomonidan to\'langan tovar qiymatining 5% (besh foiz) miqdorini tashkil etadi.</p>
-            <p>4.2. Savdo yakunlangandan keyin Platforma xizmatlari uchun hisob-faktura generatsiya qilinadi.</p>
-            <p>4.3. Ishlab chiqaruvchi komissiya to\'lovini savdo yakunlangan vaqtdan boshlab 3 (uch) kun ichida Platformaning hisob raqamiga o\'tkazadi.</p>
-            <p>4.4. Agar tovar Mijoz tomonidan qaytarilsa, ushbu tovar bo\'yicha hisoblangan komissiya keyingi davr hisob-kitoblarida chegirib qolinadi.</p>
-            <h4>5. KAFOLAT VA MOLIYAVIY QO\'LLAB-QUVVATLASH</h4>
-            <p>5.1. Platforma Mijozlarning to\'lov qobiliyatini o\'z ichki tizimi orqali tahlil qiladi.</p>
-            <p>5.2. Alohida kelishuvga asosan Platforma Mijozning muddati o\'tgan debitorlik qarzdorligini vaqtinchalik qoplab berishi mumkin.</p>
-            <p>5.3. Platforma tomonidan qoplangan mablag\' Mijozdan undirilgandan so\'ng yoki kelishilgan muddatda Platformaga qaytariladi.</p>
-            <h4>6. REYTING VA ELEKTRON TIZIM</h4>
-            <p>6.1. Barcha oldi-sotdi operatsiyalari Platformaning dasturiy ta\'minoti orqali qayd etiladi. Ushbu tizim ma\'lumotlari hisob-kitob uchun asos hisoblanadi.</p>
-            <p>6.2. Ishlab chiqaruvchining reytingi Platforma tomonidan beriladigan kafolat limitlariga va tovarlarning tizimda ko\'rinish ustuvorligiga ta\'sir qiladi.</p>
-            <h4>7. FORS-MAJOR VA JAVOBGARLIK</h4>
-            <p>7.1. Tomonlar o\'z majburiyatlarini bajarmagan taqdirda O\'zbekiston Respublikasi qonunchiligiga muvofiq javobgar bo\'ladilar.</p>
-            <p>7.2. Yetkazib berilgan tovarning sifati, yaroqlilik muddati va qadoqlanishi uchun to\'liq javobgarlik Ishlab chiqaruvchi zimmasida bo\'ladi.</p>
-            <h4>8. NIZOLARNI HAL ETISH</h4>
-            <p>8.1. Barcha kelishmovchiliklar muzokaralar yo\'li bilan hal etiladi.</p>
-            <p>8.2. Kelishuvga erishilmagan taqdirda, nizo Platforma joylashgan hududdagi iqtisodiy sudda ko\'rib chiqiladi.</p>
-            <h4>9. YAKUNIY QOIDALAR</h4>
-            <p>9.1. Shartnoma imzolangan kundan boshlab 12 oy davomida amal qiladi. Tomonlardan biri muddat tugashidan 30 kun avval bekor qilish haqida yozma xabar bermasa, shartnoma keyingi muddatga avtomatik uzaytiriladi.</p>
-            <p>9.2. Elektron tizimda "Roziman" tugmasini bosish ushbu shartnomani imzolash bilan teng yuridik kuchga ega.</p>
-            <h4>10. TOMONLARNING REKVIZITLARI</h4>
-            <div class="contract-parties">' . appPartyRequisitesHtml('PLATFORMA', $platform) . appPartyRequisitesHtml('ISHLAB CHIQARUVCHI', $seller ?: []) . '</div>
-        </div>
-    ';
-
-    return ['title' => 'Hamkorlik va xizmat ko\'rsatish shartnomasi', 'content' => $content, 'signer' => $seller, 'counterparty' => null];
+    return [
+        'title' => 'Hamkorlik va xizmat ko\'rsatish shartnomasi',
+        'content' => appContractDocumentHtml(appSellerRegisterContractLines()),
+        'signer' => appFetchUserParty($pdo, $sellerId),
+        'counterparty' => null
+    ];
 }
 
 function appBuyerOrderContractHtml(PDO $pdo, $buyerId, $sellerId, $context = []) {
-    $platform = appPlatformParty($pdo);
-    $buyer = appFetchUserParty($pdo, $buyerId);
-    $contractMeta = appContractMetaHtml($context['contract_number'] ?? '', $context['contract_signed_at'] ?? '');
-
-    $content = '
-        <div class="contract-document">
-            ' . $contractMeta . '
-            <h4>1. SHARTNOMA TOMONLARI</h4>
-            <p>1.1. "' . appEscape($platform['name']) . '", keyingi o\'rinlarda "Platforma" deb yuritiladi, direktor ' . appEscape($platform['director']) . ' nomidan, va</p>
-            <p>1.2. "' . appEscape(appValue($buyer['name'] ?? '')) . '", keyingi o\'rinlarda "Xaridor" deb yuritiladi, direktor yoki YATT ' . appEscape(appValue($buyer['director'] ?? '', 'Kiritilmagan')) . ' nomidan, mazkur shartnomani quyidagilar to\'g\'risida tuzdilar:</p>
-            <h4>2. SHARTNOMA PREDMETI</h4>
-            <p>2.1. Platforma Xaridorga tizimdagi Ishlab chiqaruvchilarning mahsulotlarini tanlash, buyurtma berish va yetkazib berishni tashkil qilish xizmatlarini ko\'rsatadi.</p>
-            <p>2.2. Xaridor Platforma orqali buyurtma qilingan tovarlarni qabul qilish va ularning haqini belgilangan muddatlarda to\'lash majburiyatini oladi.</p>
-            <h4>3. BUYURTMA VA YETKAZIB BERISH TARTIBI</h4>
-            <p>3.1. Xaridor buyurtmani Platformaning elektron tizimi orqali amalga oshiradi.</p>
-            <p>3.2. Tovarlar Xaridorning savdo nuqtasiga Ishlab chiqaruvchi yoki Platformaning logistika hamkorlari tomonidan yetkaziladi.</p>
-            <p>3.3. Tovar qabul qilinganda Xaridor uning sifati va miqdorini tekshiradi hamda elektron yoki qog\'oz shaklidagi yuk xatini imzolaydi.</p>
-            <h4>4. HISOB-KITOB TARTIBI</h4>
-            <p>4.1. Tovar narxi Platforma tizimida buyurtma berilgan vaqtdagi narx bo\'yicha belgilanadi.</p>
-            <p>4.2. Sotuvchi mahsulot tayyorligini tasdiqlagandan so\'ng hisob-faktura generatsiya qilinadi.</p>
-            <p>4.3. Xaridor hisob-faktura yaratilgan vaqtdan boshlab 10 (o\'n) kun ichida to\'lovni naqd pulsiz shaklda amalga oshiradi.</p>
-            <h4>5. PLATFORMANING KAFOLATLARI</h4>
-            <p>5.1. Platforma Xaridor va Ishlab chiqaruvchi o\'rtasidagi hisob-kitoblarning shaffofligini ta\'minlaydi.</p>
-            <p>5.2. Agar yetkazib berilgan tovar yaroqsiz chiqsa, Xaridor 24 soat ichida Platformaga ariza beradi va Platforma tovarni almashtirish yoki mablag\'ni qaytarish jarayonini muvofiqlashtiradi.</p>
-            <p>5.3. Xaridor to\'lovlarni o\'z vaqtida amalga oshirsa, Platforma unga "Ishonchli Xaridor" maqomini va kechiktirib to\'lash limitlarini taqdim etadi.</p>
-            <h4>6. TOMONLARNING JAVOBGARLIGI</h4>
-            <p>6.1. To\'lov kechiktirilganda Xaridor har bir kechiktirilgan kun uchun to\'lanmagan summaning 0,1% miqdorida penya to\'laydi, biroq bu jami summaning 10%idan oshmaydi.</p>
-            <p>6.2. Mahsulotning sifati uchun bevosita Ishlab chiqaruvchi javobgar hisoblanadi, Platforma nizoli vaziyatlarni hal qilishda Xaridor manfaatlarini himoya qilishga ko\'maklashadi.</p>
-            <h4>7. REYTING TIZIMI</h4>
-            <p>7.1. Xaridorning to\'lov intizomi asosida Platformada uning shaxsiy reytingi yuritiladi.</p>
-            <p>7.2. Past reyting Xaridor uchun kechiktirib to\'lash imkoniyatining yopilishiga va buyurtmalarning cheklanishiga sabab bo\'lishi mumkin.</p>
-            <h4>8. SHARTNOMANING AMAL QILISHI</h4>
-            <p>8.1. Shartnoma imzolangan kundan boshlab 12 oy davomida amal qiladi.</p>
-            <p>8.2. Shartnoma Platformaning elektron tizimida "Ofertani qabul qilish" yoki "Roziman" tugmasini bosish orqali ham tuzilishi mumkin va u yuridik kuchga ega.</p>
-            <h4>9. TOMONLARNING REKVIZITLARI</h4>
-            <div class="contract-parties">' . appPartyRequisitesHtml('PLATFORMA', $platform) . appPartyRequisitesHtml('XARIDOR', $buyer ?: []) . '</div>
-        </div>
-    ';
-
-    return ['title' => 'Mahsulot yetkazib berish va xizmat ko\'rsatish shartnomasi', 'content' => $content, 'signer' => $buyer, 'counterparty' => null];
+    return [
+        'title' => 'Mahsulot oldi-sotdi shartnomasi',
+        'content' => appContractDocumentHtml(appBuyerOrderContractLines()),
+        'signer' => appFetchUserParty($pdo, $buyerId),
+        'counterparty' => appFetchUserParty($pdo, $sellerId)
+    ];
 }
 
 function appPlatformTermsContractHtml(PDO $pdo, $userId, $context = []) {
-    $platform = appPlatformParty($pdo);
     $user = appFetchUserParty($pdo, $userId);
-    $source = $context['source'] ?? 'register';
-    $contractMeta = appContractMetaHtml($context['contract_number'] ?? '', $context['contract_signed_at'] ?? '');
-
-    $content = '
-        <div class="contract-document">
-            ' . $contractMeta . '
-            <h3>PLATFORMA OFERTASI VA XIZMAT KO\'RSATISH SHARTNOMASI</h3>
-            <p>Ushbu shartnoma "' . appEscape($platform['name']) . '" va foydalanuvchi o\'rtasida elektron tarzda tuziladi.</p>
-            <h4>1. TOMONLAR</h4>
-            <p>1.1. Platforma: "' . appEscape($platform['name']) . '", direktor ' . appEscape($platform['director']) . '.</p>
-            <p>1.2. Foydalanuvchi: "' . appEscape(appValue($user['name'] ?? '')) . '", rol: ' . appEscape(appValue($user['role'] ?? '')) . '.</p>
-            <h4>2. XIZMATLAR</h4>
-            <p>2.1. Platforma foydalanuvchiga kabinet, katalog, buyurtma, hisob-kitob, bildirishnoma va yordam servislaridan foydalanish imkonini beradi.</p>
-            <p>2.2. Foydalanuvchi kiritilgan kompaniya, STIR, telefon va bank rekvizitlari to\'g\'riligiga shaxsan javob beradi.</p>
-            <h4>3. ELEKTRON ROZILIK</h4>
-            <p>3.1. Ro\'yxatdan o\'tish vaqtida "Roziman" tugmasini bosish shartnomani elektron imzolash bilan teng kuchga ega.</p>
-            <p>3.2. Rozilik manbasi: ' . appEscape($source) . '.</p>
-            <h4>4. MAXFIYLIK VA JAVOBGARLIK</h4>
-            <p>4.1. Tomonlar shartnoma doirasida olingan tijorat, shaxsiy va moliyaviy ma\'lumotlarni uchinchi shaxslarga asossiz oshkor qilmaydi.</p>
-            <p>4.2. Tizimdagi barcha operatsiyalar, buyurtmalar va bildirishnomalar elektron dalil sifatida qabul qilinadi.</p>
-            <h4>5. REKVIZITLAR</h4>
-            <div class="contract-parties">' . appPartyRequisitesHtml('PLATFORMA', $platform) . appPartyRequisitesHtml('FOYDALANUVCHI', $user ?: []) . '</div>
-        </div>
-    ';
-
-    return ['title' => 'Platforma ofertasi va xizmat ko\'rsatish shartnomasi', 'content' => $content, 'signer' => $user, 'counterparty' => null];
+    $isBuyer = ($user['role'] ?? '') === 'buyer';
+    return [
+        'title' => $isBuyer ? 'Mahsulot yetkazib berish va xizmat ko\'rsatish shartnomasi' : 'Hamkorlik va xizmat ko\'rsatish shartnomasi',
+        'content' => appContractDocumentHtml($isBuyer ? appBuyerRegisterContractLines() : appSellerRegisterContractLines()),
+        'signer' => $user,
+        'counterparty' => null
+    ];
 }
 
 function buildContractDocument(PDO $pdo, $type, $signerId, $counterpartyId = null, $context = []) {
@@ -376,7 +410,7 @@ function hasContractSignature(PDO $pdo, $type, $signerId) {
 }
 
 function recordContractSignature(PDO $pdo, $type, $signerId, $counterpartyId = null, $context = []) {
-    if (in_array($type, ['seller_listing', 'buyer_order'], true)) {
+    if ($type === 'seller_listing') {
         $stmt = $pdo->prepare("SELECT id FROM contract_signatures WHERE contract_type = ? AND signer_id = ? ORDER BY signed_at ASC LIMIT 1");
         $stmt->execute([$type, $signerId]);
         $existingId = $stmt->fetchColumn();

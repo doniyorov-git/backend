@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $stmt3->execute([$repId, $data['sellerId'], $orderId, $item['prodId'], 'pending', $dueDate]);
             }
 
-            recordContractSignature($pdo, 'buyer_order', $buyerId, null, ['source' => 'checkout']);
+            recordContractSignature($pdo, 'buyer_order', $buyerId, $data['sellerId'], ['source' => 'checkout', 'order_id' => $orderId]);
             
             $pdo->commit();
             createNotification($pdo, $data['sellerId'], 'Yangi buyurtma', '#' . $orderId . ' buyurtma qabul qilindi.', 'info', 'seller-orders');

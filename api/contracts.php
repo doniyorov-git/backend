@@ -16,6 +16,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                    s.name AS signer_name, s.role AS signer_role, s.inn AS signer_inn, s.phone AS signer_phone,
                    cp.name AS counterparty_name, cp.role AS counterparty_role, cp.inn AS counterparty_inn, cp.phone AS counterparty_phone,
                    p.name AS product_name, p.sku AS product_sku,
+                   (
+                       SELECT GROUP_CONCAT(DISTINCT op.name ORDER BY op.name SEPARATOR ', ')
+                       FROM order_items oi
+                       JOIN products op ON oi.product_id = op.id
+                       WHERE oi.order_id = c.order_id
+                   ) AS order_product_names,
                    o.total AS order_total
             FROM contract_signatures c
             LEFT JOIN users s ON c.signer_id = s.id
@@ -32,6 +38,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                s.name AS signer_name, s.role AS signer_role, s.inn AS signer_inn, s.phone AS signer_phone,
                cp.name AS counterparty_name, cp.role AS counterparty_role, cp.inn AS counterparty_inn, cp.phone AS counterparty_phone,
                p.name AS product_name, p.sku AS product_sku,
+               (
+                   SELECT GROUP_CONCAT(DISTINCT op.name ORDER BY op.name SEPARATOR ', ')
+                   FROM order_items oi
+                   JOIN products op ON oi.product_id = op.id
+                   WHERE oi.order_id = c.order_id
+               ) AS order_product_names,
                o.total AS order_total
         FROM contract_signatures c
         LEFT JOIN users s ON c.signer_id = s.id
