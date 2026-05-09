@@ -142,6 +142,32 @@ function appFormatContractDate($value) {
     return $raw !== '' ? $raw : date('d.m.Y');
 }
 
+function appContractNumberValue($value) {
+    return appValue($value, 'avtomatik');
+}
+
+function appPartyDirector($party) {
+    return appValue(($party['director'] ?? '') ?: ($party['name'] ?? ''));
+}
+
+function appContractDateLine($value = null, $city = 'Andijon sh.') {
+    $timestamp = $value ? strtotime((string) $value) : time();
+    if (!$timestamp) {
+        $timestamp = time();
+    }
+    $months = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'];
+    $line = '"' . date('d', $timestamp) . '" ' . $months[(int) date('n', $timestamp) - 1] . ' ' . date('Y', $timestamp) . ' y.';
+    return $city !== '' ? $line . '    ' . $city : $line;
+}
+
+function appPartyRequisitesLine($label, $party) {
+    return $label . ': ' . appValue($party['name'] ?? '') .
+        '; STIR: ' . appValue($party['inn'] ?? '') .
+        '; Telefon: ' . appValue($party['phone'] ?? '') .
+        '; H/r: ' . appValue($party['bank_account'] ?? '') .
+        '; MFO: ' . appValue($party['mfo'] ?? '') . '.';
+}
+
 function appContractMetaHtml($contractNumber, $signedAt) {
     return '
         <p><b>Shartnoma raqami:</b> ' . appEscape(appValue($contractNumber, 'Aniqlanmagan')) . '<br>
@@ -165,7 +191,7 @@ function appFetchUserParty(PDO $pdo, $userId) {
     return [
         'id' => $user['id'],
         'name' => $user['name'],
-        'director' => '',
+        'director' => $user['name'],
         'inn' => $user['inn'] ?? '',
         'phone' => $user['phone'] ?? '',
         'role' => $user['role'] ?? '',
@@ -231,6 +257,21 @@ function appFetchOrder(PDO $pdo, $orderId) {
     return $stmt->fetch() ?: null;
 }
 
+function appFetchOrderItems(PDO $pdo, $orderId) {
+    if (!$orderId) {
+        return [];
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT oi.product_id, oi.quantity, oi.price, p.name AS product_name, p.unit
+        FROM order_items oi
+        LEFT JOIN products p ON oi.product_id = p.id
+        WHERE oi.order_id = ?
+    ");
+    $stmt->execute([$orderId]);
+    return $stmt->fetchAll();
+}
+
 function appContractDocumentHtml(array $lines) {
     $html = '<div class="contract-document">';
     foreach ($lines as $line) {
@@ -247,13 +288,22 @@ function appContractDocumentHtml(array $lines) {
     return $html . '</div>';
 }
 
-function appSellerRegisterContractLines() {
+function appSellerRegisterContractLines($seller = null, $meta = []) {
+    $seller = $seller ?: [];
+    $platform = $meta['platform'] ?? [
+        'name' => 'RoboTexnika MCHJ',
+        'director' => 'Mirzayev Sardor',
+        'inn' => '',
+        'phone' => '',
+        'bank_account' => '',
+        'mfo' => ''
+    ];
     return [
-        "TITLE:HAMKORLIK VA XIZMAT KO'RSATISH SHARTNOMASI No. 1",
-        "\"___\" ________ 2026 y.    Andijon sh.",
+        "TITLE:HAMKORLIK VA XIZMAT KO'RSATISH SHARTNOMASI No. " . appContractNumberValue($meta['contract_number'] ?? ''),
+        appContractDateLine($meta['contract_signed_at'] ?? null),
         "SECTION:1. SHARTNOMA TOMONLARI",
-        "1.1. \"RoboTexnika\" MCHJ, keyingi o'rinlarda \"Platforma\" deb yuritiladi, direktor Mirzayev Sardor (Ustav asosida) nomidan bir tomondan, va",
-        "1.2. \"________________\", keyingi o'rinlarda \"Ishlab chiqaruvchi\" deb yuritiladi, direktor ________________ (Ustav asosida) nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
+        "1.1. \"" . appValue($platform['name'] ?? '') . "\", keyingi o'rinlarda \"Platforma\" deb yuritiladi, direktor " . appPartyDirector($platform) . " (Ustav asosida) nomidan bir tomondan, va",
+        "1.2. \"" . appValue($seller['name'] ?? '') . "\", keyingi o'rinlarda \"Ishlab chiqaruvchi\" deb yuritiladi, direktor " . appPartyDirector($seller) . " (Ustav asosida) nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
         "SECTION:2. SHARTNOMA PREDMETI",
         "2.1. Platforma Ishlab chiqaruvchining tovarlarini chakana savdo nuqtalariga (Mijozlarga) sotishda vositachilik va axborot-texnologik xizmatlarini ko'rsatadi.",
         "2.2. Platforma quyidagi majburiyatlarni oladi:",
@@ -291,17 +341,29 @@ function appSellerRegisterContractLines() {
         "8.2. Kelishuvga erishilmagan taqdirda, nizo Platforma joylashgan hududdagi iqtisodiy sudda ko'rib chiqiladi.",
         "SECTION:9. YAKUNIY QOIDALAR",
         "9.1. Shartnoma imzolangan kundan boshlab 12 oy davomida amal qiladi. Agar tomonlardan biri muddat tugashidan 30 kun avval bekor qilish haqida yozma xabar bermasa, shartnoma keyingi muddatga avtomatik uzaytiriladi.",
-        "9.2. Mazkur shartnoma ikki nusxada tuzildi."
+        "9.2. Mazkur shartnoma ikki nusxada tuzildi.",
+        "SECTION:10. TOMONLARNING REKVIZITLARI",
+        appPartyRequisitesLine("Platforma", $platform),
+        appPartyRequisitesLine("Ishlab chiqaruvchi", $seller)
     ];
 }
 
-function appBuyerRegisterContractLines() {
+function appBuyerRegisterContractLines($buyer = null, $meta = []) {
+    $buyer = $buyer ?: [];
+    $platform = $meta['platform'] ?? [
+        'name' => 'RoboTexnika MCHJ',
+        'director' => 'Mirzayev Sardor',
+        'inn' => '',
+        'phone' => '',
+        'bank_account' => '',
+        'mfo' => ''
+    ];
     return [
-        "TITLE:MAHSULOT YETKAZIB BERISH VA XIZMAT KO'RSATISH SHARTNOMASI No.___",
-        "\"___\" ________ 2026 y.     Andijon sh.",
+        "TITLE:MAHSULOT YETKAZIB BERISH VA XIZMAT KO'RSATISH SHARTNOMASI No. " . appContractNumberValue($meta['contract_number'] ?? ''),
+        appContractDateLine($meta['contract_signed_at'] ?? null),
         "SECTION:1. SHARTNOMA TOMONLARI",
-        "1.1. \"RoboTexnika\" MCHJ, keyingi o'rinlarda \"Platforma\" deb yuritiladi, direktor Mirzayev Sardor nomidan, va",
-        "1.2. ________________, keyingi o'rinlarda \"Xaridor\" deb yuritiladi, direktor (yoki YATT) ________________ nomidan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
+        "1.1. \"" . appValue($platform['name'] ?? '') . "\", keyingi o'rinlarda \"Platforma\" deb yuritiladi, direktor " . appPartyDirector($platform) . " nomidan, va",
+        "1.2. \"" . appValue($buyer['name'] ?? '') . "\", keyingi o'rinlarda \"Xaridor\" deb yuritiladi, direktor (yoki YATT) " . appPartyDirector($buyer) . " nomidan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
         "SECTION:2. SHARTNOMA PREDMETI",
         "2.1. Platforma Xaridorga tizimdagi Ishlab chiqaruvchilarning mahsulotlarini tanlash, buyurtma berish va yetkazib berishni tashkil qilish xizmatlarini ko'rsatadi.",
         "2.2. Xaridor Platforma orqali buyurtma qilingan tovarlarni qabul qilish va ularning haqini belgilangan muddatlarda to'lash majburiyatini oladi.",
@@ -327,20 +389,41 @@ function appBuyerRegisterContractLines() {
         "7.2. Past reyting Xaridor uchun kechiktirib to'lash imkoniyatining yopilishiga va buyurtmalarning cheklanishiga sabab bo'lishi mumkin.",
         "SECTION:8. SHARTNOMANING AMAL QILISHI",
         "8.1. Shartnoma imzolangan kundan boshlab 12 oy davomida amal qiladi.",
-        "8.2. Shartnoma Platformaning elektron tizimida \"Ofertani qabul qilish\" tugmasini bosish orqali ham tuzilishi mumkin va u yuridik kuchga ega."
+        "8.2. Shartnoma Platformaning elektron tizimida \"Ofertani qabul qilish\" tugmasini bosish orqali ham tuzilishi mumkin va u yuridik kuchga ega.",
+        "SECTION:9. TOMONLARNING REKVIZITLARI",
+        appPartyRequisitesLine("Platforma", $platform),
+        appPartyRequisitesLine("Xaridor", $buyer)
     ];
 }
 
-function appBuyerOrderContractLines() {
+function appBuyerOrderContractLines($seller = null, $buyer = null, $order = null, $items = [], $meta = []) {
+    $seller = $seller ?: [];
+    $buyer = $buyer ?: [];
+    $itemNames = [];
+    foreach ($items as $item) {
+        $name = appValue($item['product_name'] ?? '', 'Mahsulot');
+        $qty = appValue($item['quantity'] ?? '', '1');
+        $unit = appValue($item['unit'] ?? '', 'dona');
+        $itemNames[] = $name . ' - ' . $qty . ' ' . $unit;
+    }
+    $orderTotal = $order['total'] ?? ($meta['total'] ?? null);
+    $orderSummary = '';
+    if ($itemNames) {
+        $orderSummary .= ' Tovarlar: ' . implode(', ', $itemNames) . '.';
+    }
+    if ($orderTotal !== null && $orderTotal !== '') {
+        $orderSummary .= ' Jami summa: ' . number_format((float) $orderTotal, 0, '.', ' ') . ' UZS.';
+    }
+
     return [
-        "TITLE:MAHSULOT OLDI-SOTDI SHARTNOMASI No.___",
-        "\"___\" ________ 2026 y.",
+        "TITLE:MAHSULOT OLDI-SOTDI SHARTNOMASI No. " . appContractNumberValue($meta['contract_number'] ?? ''),
+        appContractDateLine($meta['contract_signed_at'] ?? null, ''),
         "SECTION:1. SHARTNOMA TOMONLARI",
-        "1.1. \"________________\" (keyingi o'rinlarda - Sotuvchi), direktor ________________ nomidan bir tomondan, va",
-        "1.2. \"________________\" (keyingi o'rinlarda - Xaridor), direktor ________________ nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
+        "1.1. \"" . appValue($seller['name'] ?? '') . "\" (keyingi o'rinlarda - Sotuvchi), direktor " . appPartyDirector($seller) . " nomidan bir tomondan, va",
+        "1.2. \"" . appValue($buyer['name'] ?? '') . "\" (keyingi o'rinlarda - Xaridor), direktor " . appPartyDirector($buyer) . " nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
         "SECTION:2. SHARTNOMA PREDMETI",
         "2.1. Sotuvchi o'zi ishlab chiqargan mahsulotlarni Xaridorga mulk qilib topshirish, Xaridor esa mahsulotlarni qabul qilish va haqini to'lash majburiyatini oladi.",
-        "2.2. Mazkur shartnoma doirasidagi barcha buyurtmalar, tovarlar ro'yxati va ularning narxi \"My-Diler.uz\" elektron platformasi (keyingi o'rinlarda - Platforma) orqali rasmiylashtiriladi.",
+        "2.2. Mazkur shartnoma doirasidagi barcha buyurtmalar, tovarlar ro'yxati va ularning narxi \"My-Diler.uz\" elektron platformasi (keyingi o'rinlarda - Platforma) orqali rasmiylashtiriladi." . $orderSummary,
         "SECTION:3. TO'LOV SHARTLARI",
         "3.1. Mahsulotlarning narxi Platformada buyurtma berilgan vaqtda belgilangan amaldagi preyskurant bo'yicha hisoblanadi.",
         "3.2. To'lov shartlari (oldindan to'lov, bo'lib to'lash yoki kechiktirib to'lash) va muddatlari Platformada belgilangan tartibda va miqdorda amalga oshiriladi.",
@@ -358,34 +441,44 @@ function appBuyerOrderContractLines() {
         "SECTION:7. YAKUNIY QOIDALAR",
         "7.1. Platformadagi elektron ma'lumotlar, buyurtmalar tarixi va hisob-kitoblar shartnomaning ajralmas qismi va rasmiy dalil hisoblanadi.",
         "7.2. Nizolar muzokaralar yo'li bilan, kelishuv bo'lmasa, iqtisodiy sudda ko'rib chiqiladi.",
-        "7.3. Shartnoma tomonlar imzolagan paytdan boshlab 1 yil davomida amal qiladi."
+        "7.3. Shartnoma tomonlar imzolagan paytdan boshlab 1 yil davomida amal qiladi.",
+        "SECTION:8. TOMONLARNING REKVIZITLARI",
+        appPartyRequisitesLine("Sotuvchi", $seller),
+        appPartyRequisitesLine("Xaridor", $buyer)
     ];
 }
 
 function appSellerListingContractHtml(PDO $pdo, $sellerId, $context = []) {
+    $seller = appFetchUserParty($pdo, $sellerId);
+    $platform = appPlatformParty($pdo);
     return [
         'title' => 'Hamkorlik va xizmat ko\'rsatish shartnomasi',
-        'content' => appContractDocumentHtml(appSellerRegisterContractLines()),
-        'signer' => appFetchUserParty($pdo, $sellerId),
+        'content' => appContractDocumentHtml(appSellerRegisterContractLines($seller, array_merge($context, ['platform' => $platform]))),
+        'signer' => $seller,
         'counterparty' => null
     ];
 }
 
 function appBuyerOrderContractHtml(PDO $pdo, $buyerId, $sellerId, $context = []) {
+    $buyer = appFetchUserParty($pdo, $buyerId);
+    $seller = appFetchUserParty($pdo, $sellerId);
+    $order = appFetchOrder($pdo, $context['order_id'] ?? null);
+    $items = appFetchOrderItems($pdo, $context['order_id'] ?? null);
     return [
         'title' => 'Mahsulot oldi-sotdi shartnomasi',
-        'content' => appContractDocumentHtml(appBuyerOrderContractLines()),
-        'signer' => appFetchUserParty($pdo, $buyerId),
-        'counterparty' => appFetchUserParty($pdo, $sellerId)
+        'content' => appContractDocumentHtml(appBuyerOrderContractLines($seller, $buyer, $order, $items, $context)),
+        'signer' => $buyer,
+        'counterparty' => $seller
     ];
 }
 
 function appPlatformTermsContractHtml(PDO $pdo, $userId, $context = []) {
     $user = appFetchUserParty($pdo, $userId);
+    $platform = appPlatformParty($pdo);
     $isBuyer = ($user['role'] ?? '') === 'buyer';
     return [
         'title' => $isBuyer ? 'Mahsulot yetkazib berish va xizmat ko\'rsatish shartnomasi' : 'Hamkorlik va xizmat ko\'rsatish shartnomasi',
-        'content' => appContractDocumentHtml($isBuyer ? appBuyerRegisterContractLines() : appSellerRegisterContractLines()),
+        'content' => appContractDocumentHtml($isBuyer ? appBuyerRegisterContractLines($user, array_merge($context, ['platform' => $platform])) : appSellerRegisterContractLines($user, array_merge($context, ['platform' => $platform]))),
         'signer' => $user,
         'counterparty' => null
     ];
