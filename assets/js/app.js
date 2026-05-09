@@ -709,7 +709,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 const amount = Number(order.comm || order.total * 0.05);
                 const totals = invoiceTotals(amount);
                 return [{
-                    name: `Platforma vositachilik xizmati, buyurtma #${order.id}`,
+                    name: `Platforma vositachilik xizmati: ${orderDisplayName(order)}`,
                     catalog: "74900000000000000",
                     mxikCode: "74900000000000000",
                     unit: "xizmat",
@@ -814,7 +814,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             if (type === "admin") {
                 const amount = Number(order.comm || order.total * 0.05);
                 return [{
-                    name: `Platforma vositachilik xizmati, buyurtma #${order.id}`,
+                    name: `Platforma vositachilik xizmati: ${orderDisplayName(order)}`,
                     catalog: "74900000000000000",
                     unit: "xizmat",
                     qty: 1,
