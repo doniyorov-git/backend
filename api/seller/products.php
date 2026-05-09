@@ -101,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
         ");
         $stmt->execute([$id, $sellerId, $name, $sku, $mxikCode, $category, $region, $model, $price, $unit, $imagePath, $prepayPercent, $realDays, $photoDays]);
-        recordContractSignature($pdo, 'seller_listing', $sellerId, null, ['source' => 'product_create']);
+        recordContractSignature($pdo, 'seller_listing', $sellerId, null, ['source' => 'product_create', 'product_id' => $id]);
         notifyRole($pdo, 'admin', 'Yangi mahsulot moderatsiyada', $name . ' mahsuloti tasdiqlash uchun yuborildi.', 'info', 'admin-moderation');
     }
     

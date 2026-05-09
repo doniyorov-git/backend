@@ -299,6 +299,32 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return String(value || "").replace(/\D/g, "").slice(0, 32);
         }
 
+        function displayValue(value, fallback = "Kiritilmagan") {
+            const text = String(value ?? "").trim();
+            return text || fallback;
+        }
+
+        function contractNumberValue(value) {
+            return displayValue(value, "avtomatik");
+        }
+
+        function contractPartyDirector(party) {
+            return displayValue(party?.director || party?.name);
+        }
+
+        function contractDateLine(value = new Date(), city = "Andijon sh.") {
+            const date = value instanceof Date ? value : parseAppDate(value);
+            const activeDate = date && !Number.isNaN(date.getTime()) ? date : new Date();
+            const months = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"];
+            const day = String(activeDate.getDate()).padStart(2, "0");
+            const line = `"${day}" ${months[activeDate.getMonth()]} ${activeDate.getFullYear()} y.`;
+            return city ? `${line}    ${city}` : line;
+        }
+
+        function partyRequisitesLine(label, party) {
+            return `${label}: ${displayValue(party?.name)}; STIR: ${displayValue(party?.inn)}; Telefon: ${displayValue(party?.phone)}; H/r: ${displayValue(party?.bankAccount)}; MFO: ${displayValue(party?.bankMfo)}.`;
+        }
+
         function normalizeSessionUser(user) {
             if (!user) return user;
             return {
@@ -1261,7 +1287,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function orderViewButton(orderId) {
-            return `<button class="btn btn-outline" onclick="openOrderDetails('${orderId}')"><i class="ri-eye-line"></i> View</button>`;
+            return `<button class="btn btn-outline btn-icon" onclick="openOrderDetails('${orderId}')" title="Ko'rish" aria-label="Ko'rish"><i class="ri-eye-line"></i></button>`;
         }
 
         function roleLabel(role) {
@@ -1374,6 +1400,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             const regPhone = phoneDigits(regPhoneRaw);
             return {
                 name: user.name || document.getElementById("reg-name")?.value.trim() || "",
+                director: user.director || user.name || document.getElementById("reg-name")?.value.trim() || "",
                 inn: user.inn || document.getElementById("reg-inn")?.value.trim() || "",
                 phone: user.phone || (regPhone.length === 9 ? "998" + regPhone : ""),
                 role: user.role || document.getElementById("reg-role")?.value || "",
@@ -1385,6 +1412,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function platformParty() {
             return {
                 name: "RoboTexnika MCHJ",
+                director: "Mirzayev Sardor",
                 inn: "Kiritilmagan",
                 phone: "Kiritilmagan",
                 bankAccount: "Kiritilmagan",
@@ -1401,12 +1429,14 @@ const STORAGE_KEY = "myDillerUzStateV2";
             }).join("");
         }
 
-        const SELLER_REGISTER_CONTRACT_LINES = [
-            "TITLE:HAMKORLIK VA XIZMAT KO'RSATISH SHARTNOMASI No. 1",
-            "\"___\" ________ 2026 y.    Andijon sh.",
+        function sellerRegisterContractLines(seller = currentUserParty(), meta = {}) {
+            const platform = platformParty();
+            return [
+            `TITLE:HAMKORLIK VA XIZMAT KO'RSATISH SHARTNOMASI No. ${contractNumberValue(meta.contractNumber)}`,
+            contractDateLine(meta.signedAt),
             "SECTION:1. SHARTNOMA TOMONLARI",
-            "1.1. \"RoboTexnika\" MCHJ, keyingi o'rinlarda \"Platforma\" deb yuritiladi, direktor Mirzayev Sardor (Ustav asosida) nomidan bir tomondan, va",
-            "1.2. \"________________\", keyingi o'rinlarda \"Ishlab chiqaruvchi\" deb yuritiladi, direktor ________________ (Ustav asosida) nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
+            `1.1. "${displayValue(platform.name)}", keyingi o'rinlarda "Platforma" deb yuritiladi, direktor ${contractPartyDirector(platform)} (Ustav asosida) nomidan bir tomondan, va`,
+            `1.2. "${displayValue(seller.name)}", keyingi o'rinlarda "Ishlab chiqaruvchi" deb yuritiladi, direktor ${contractPartyDirector(seller)} (Ustav asosida) nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:`,
             "SECTION:2. SHARTNOMA PREDMETI",
             "2.1. Platforma Ishlab chiqaruvchining tovarlarini chakana savdo nuqtalariga (Mijozlarga) sotishda vositachilik va axborot-texnologik xizmatlarini ko'rsatadi.",
             "2.2. Platforma quyidagi majburiyatlarni oladi:",
@@ -1444,15 +1474,21 @@ const STORAGE_KEY = "myDillerUzStateV2";
             "8.2. Kelishuvga erishilmagan taqdirda, nizo Platforma joylashgan hududdagi iqtisodiy sudda ko'rib chiqiladi.",
             "SECTION:9. YAKUNIY QOIDALAR",
             "9.1. Shartnoma imzolangan kundan boshlab 12 oy davomida amal qiladi. Agar tomonlardan biri muddat tugashidan 30 kun avval bekor qilish haqida yozma xabar bermasa, shartnoma keyingi muddatga avtomatik uzaytiriladi.",
-            "9.2. Mazkur shartnoma ikki nusxada tuzildi."
+            "9.2. Mazkur shartnoma ikki nusxada tuzildi.",
+            "SECTION:10. TOMONLARNING REKVIZITLARI",
+            partyRequisitesLine("Platforma", platform),
+            partyRequisitesLine("Ishlab chiqaruvchi", seller)
         ];
+        }
 
-        const BUYER_REGISTER_CONTRACT_LINES = [
-            "TITLE:MAHSULOT YETKAZIB BERISH VA XIZMAT KO'RSATISH SHARTNOMASI No.___",
-            "\"___\" ________ 2026 y.     Andijon sh.",
+        function buyerRegisterContractLines(buyer = currentUserParty(), meta = {}) {
+            const platform = platformParty();
+            return [
+            `TITLE:MAHSULOT YETKAZIB BERISH VA XIZMAT KO'RSATISH SHARTNOMASI No. ${contractNumberValue(meta.contractNumber)}`,
+            contractDateLine(meta.signedAt),
             "SECTION:1. SHARTNOMA TOMONLARI",
-            "1.1. \"RoboTexnika\" MCHJ, keyingi o'rinlarda \"Platforma\" deb yuritiladi, direktor Mirzayev Sardor nomidan, va",
-            "1.2. ________________, keyingi o'rinlarda \"Xaridor\" deb yuritiladi, direktor (yoki YATT) ________________ nomidan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
+            `1.1. "${displayValue(platform.name)}", keyingi o'rinlarda "Platforma" deb yuritiladi, direktor ${contractPartyDirector(platform)} nomidan, va`,
+            `1.2. "${displayValue(buyer.name)}", keyingi o'rinlarda "Xaridor" deb yuritiladi, direktor (yoki YATT) ${contractPartyDirector(buyer)} nomidan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:`,
             "SECTION:2. SHARTNOMA PREDMETI",
             "2.1. Platforma Xaridorga tizimdagi Ishlab chiqaruvchilarning mahsulotlarini tanlash, buyurtma berish va yetkazib berishni tashkil qilish xizmatlarini ko'rsatadi.",
             "2.2. Xaridor Platforma orqali buyurtma qilingan tovarlarni qabul qilish va ularning haqini belgilangan muddatlarda to'lash majburiyatini oladi.",
@@ -1478,18 +1514,28 @@ const STORAGE_KEY = "myDillerUzStateV2";
             "7.2. Past reyting Xaridor uchun kechiktirib to'lash imkoniyatining yopilishiga va buyurtmalarning cheklanishiga sabab bo'lishi mumkin.",
             "SECTION:8. SHARTNOMANING AMAL QILISHI",
             "8.1. Shartnoma imzolangan kundan boshlab 12 oy davomida amal qiladi.",
-            "8.2. Shartnoma Platformaning elektron tizimida \"Ofertani qabul qilish\" tugmasini bosish orqali ham tuzilishi mumkin va u yuridik kuchga ega."
+            "8.2. Shartnoma Platformaning elektron tizimida \"Ofertani qabul qilish\" tugmasini bosish orqali ham tuzilishi mumkin va u yuridik kuchga ega.",
+            "SECTION:9. TOMONLARNING REKVIZITLARI",
+            partyRequisitesLine("Platforma", platform),
+            partyRequisitesLine("Xaridor", buyer)
         ];
+        }
 
-        const BUYER_ORDER_CONTRACT_LINES = [
-            "TITLE:MAHSULOT OLDI-SOTDI SHARTNOMASI No.___",
-            "\"___\" ________ 2026 y.",
+        function buyerOrderContractLines({ buyer = currentUserParty(), seller = {}, total = 0, items = [], meta = {} } = {}) {
+            const itemNames = items.map(item => {
+                const product = productById(item.prodId || item.product_id) || {};
+                const qty = item.qty || item.quantity || 1;
+                return `${displayValue(item.productName || item.product_name || product.name, "Mahsulot")} - ${qty} ${item.unit || product.unit || "dona"}`;
+            }).filter(Boolean);
+            return [
+            `TITLE:MAHSULOT OLDI-SOTDI SHARTNOMASI No. ${contractNumberValue(meta.contractNumber)}`,
+            contractDateLine(meta.signedAt, ""),
             "SECTION:1. SHARTNOMA TOMONLARI",
-            "1.1. \"________________\" (keyingi o'rinlarda - Sotuvchi), direktor ________________ nomidan bir tomondan, va",
-            "1.2. \"________________\" (keyingi o'rinlarda - Xaridor), direktor ________________ nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
+            `1.1. "${displayValue(seller.name)}" (keyingi o'rinlarda - Sotuvchi), direktor ${contractPartyDirector(seller)} nomidan bir tomondan, va`,
+            `1.2. "${displayValue(buyer.name)}" (keyingi o'rinlarda - Xaridor), direktor ${contractPartyDirector(buyer)} nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:`,
             "SECTION:2. SHARTNOMA PREDMETI",
             "2.1. Sotuvchi o'zi ishlab chiqargan mahsulotlarni Xaridorga mulk qilib topshirish, Xaridor esa mahsulotlarni qabul qilish va haqini to'lash majburiyatini oladi.",
-            "2.2. Mazkur shartnoma doirasidagi barcha buyurtmalar, tovarlar ro'yxati va ularning narxi \"My-Diler.uz\" elektron platformasi (keyingi o'rinlarda - Platforma) orqali rasmiylashtiriladi.",
+            `2.2. Mazkur shartnoma doirasidagi barcha buyurtmalar, tovarlar ro'yxati va ularning narxi "My-Diler.uz" elektron platformasi orqali rasmiylashtiriladi.${itemNames.length ? ` Tovarlar: ${itemNames.join(", ")}.` : ""}${total ? ` Jami summa: ${money(total)}.` : ""}`,
             "SECTION:3. TO'LOV SHARTLARI",
             "3.1. Mahsulotlarning narxi Platformada buyurtma berilgan vaqtda belgilangan amaldagi preyskurant bo'yicha hisoblanadi.",
             "3.2. To'lov shartlari (oldindan to'lov, bo'lib to'lash yoki kechiktirib to'lash) va muddatlari Platformada belgilangan tartibda va miqdorda amalga oshiriladi.",
@@ -1507,24 +1553,41 @@ const STORAGE_KEY = "myDillerUzStateV2";
             "SECTION:7. YAKUNIY QOIDALAR",
             "7.1. Platformadagi elektron ma'lumotlar, buyurtmalar tarixi va hisob-kitoblar shartnomaning ajralmas qismi va rasmiy dalil hisoblanadi.",
             "7.2. Nizolar muzokaralar yo'li bilan, kelishuv bo'lmasa, iqtisodiy sudda ko'rib chiqiladi.",
-            "7.3. Shartnoma tomonlar imzolagan paytdan boshlab 1 yil davomida amal qiladi."
+            "7.3. Shartnoma tomonlar imzolagan paytdan boshlab 1 yil davomida amal qiladi.",
+            "SECTION:8. TOMONLARNING REKVIZITLARI",
+            partyRequisitesLine("Sotuvchi", seller),
+            partyRequisitesLine("Xaridor", buyer)
         ];
+        }
 
         function contractDocumentHtml(lines) {
             return `<div class="contract-document">${contractParagraphs(lines)}</div>`;
         }
 
         function platformContractHtml(source = "register") {
-            const role = currentUserParty().role;
-            return contractDocumentHtml(role === "buyer" ? BUYER_REGISTER_CONTRACT_LINES : SELLER_REGISTER_CONTRACT_LINES);
+            const user = currentUserParty();
+            return contractDocumentHtml(user.role === "buyer" ? buyerRegisterContractLines(user) : sellerRegisterContractLines(user));
         }
 
         function sellerListingContractHtml(product = {}) {
-            return contractDocumentHtml(SELLER_REGISTER_CONTRACT_LINES);
+            return contractDocumentHtml(sellerRegisterContractLines(currentUserParty(), { product }));
         }
 
         function buyerOrderContractHtml(total = 0) {
-            return contractDocumentHtml(BUYER_ORDER_CONTRACT_LINES);
+            const sellers = [...new Map(DB.cart.map(item => {
+                const product = productById(item.prodId);
+                if (!product) return null;
+                const seller = userById(product.sellerId);
+                return [product.sellerId, {
+                    ...seller,
+                    name: product.sellerName || product.seller_name || seller.name,
+                    phone: product.sellerPhone || product.seller_phone || seller.phone
+                }];
+            }).filter(Boolean)).values()];
+            const seller = sellers.length === 1
+                ? sellers[0]
+                : { name: sellers.map(item => item.name).filter(Boolean).join(", "), director: sellers.map(item => item.director || item.name).filter(Boolean).join(", ") };
+            return contractDocumentHtml(buyerOrderContractLines({ buyer: currentUserParty(), seller, total, items: DB.cart }));
         }
 
         function openContractModal(e, target = "register") {
