@@ -160,8 +160,26 @@ function appContractDateLine($value = null, $city = 'Andijon sh.') {
     return $city !== '' ? $line . '    ' . $city : $line;
 }
 
+function appStaticPlatformParty() {
+    return [
+        'id' => 'platform',
+        'name' => '"ROBO TEXNIKA" XK',
+        'director' => 'Mirzayev Sardor',
+        'address' => 'АНДИЖАНСКАЯ ОБЛАСТЬ, ГОРОД АНДИЖАН, Мирпўстин МФЙ, Майбоғча 13 тор кучаси, 3-уй',
+        'inn' => '310938488',
+        'phone' => 'Kiritilmagan',
+        'role' => 'platform',
+        'bank_account' => '20208000905719313001',
+        'mfo' => '00446',
+        'created_at' => ''
+    ];
+}
+
 function appPartyRequisitesLine($label, $party) {
+    $address = appValue($party['address'] ?? '', '');
+    $addressPart = $address !== '' ? '; Manzil: ' . $address : '';
     return $label . ': ' . appValue($party['name'] ?? '') .
+        $addressPart .
         '; STIR: ' . appValue($party['inn'] ?? '') .
         '; Telefon: ' . appValue($party['phone'] ?? '') .
         '; H/r: ' . appValue($party['bank_account'] ?? '') .
@@ -202,25 +220,7 @@ function appFetchUserParty(PDO $pdo, $userId) {
 }
 
 function appPlatformParty(PDO $pdo) {
-    $admin = null;
-    try {
-        $stmt = $pdo->query("SELECT id, name, inn, phone, bank_account, mfo FROM users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1");
-        $admin = $stmt->fetch();
-    } catch (Exception $e) {
-        $admin = null;
-    }
-
-    return [
-        'id' => $admin['id'] ?? 'platform',
-        'name' => 'RoboTexnika MCHJ',
-        'director' => 'Mirzayev Sardor',
-        'inn' => $admin['inn'] ?? '',
-        'phone' => $admin['phone'] ?? '',
-        'role' => 'platform',
-        'bank_account' => $admin['bank_account'] ?? '',
-        'mfo' => $admin['mfo'] ?? '',
-        'created_at' => ''
-    ];
+    return appStaticPlatformParty();
 }
 
 function appListingBuyerParty() {
@@ -267,12 +267,14 @@ function appProductContractSummary($product = null) {
 }
 
 function appPartyRequisitesHtml($label, $party) {
+    $address = appValue($party['address'] ?? '', '');
+    $addressLine = $address !== '' ? '            Manzil: ' . appEscape($address) . '<br>' . "\n" : '';
     return '
         <div class="contract-party">
             <b>' . appEscape($label) . '</b><br>
             Nomi: ' . appEscape(appValue($party['name'] ?? '')) . '<br>
             Direktor/YATT: ' . appEscape(appValue($party['director'] ?? '', 'Kiritilmagan')) . '<br>
-            STIR: ' . appEscape(appValue($party['inn'] ?? '')) . '<br>
+' . $addressLine . '            STIR: ' . appEscape(appValue($party['inn'] ?? '')) . '<br>
             Telefon: ' . appEscape(appValue($party['phone'] ?? '')) . '<br>
             H/r: ' . appEscape(appValue($party['bank_account'] ?? '')) . '<br>
             MFO: ' . appEscape(appValue($party['mfo'] ?? '')) . '
@@ -333,19 +335,12 @@ function appContractDocumentHtml(array $lines) {
 
 function appSellerRegisterContractLines($seller = null, $meta = []) {
     $seller = $seller ?: [];
-    $platform = $meta['platform'] ?? [
-        'name' => 'RoboTexnika MCHJ',
-        'director' => 'Mirzayev Sardor',
-        'inn' => '',
-        'phone' => '',
-        'bank_account' => '',
-        'mfo' => ''
-    ];
+    $platform = $meta['platform'] ?? appStaticPlatformParty();
     return [
         "TITLE:HAMKORLIK VA XIZMAT KO'RSATISH SHARTNOMASI No. " . appContractNumberValue($meta['contract_number'] ?? ''),
         appContractDateLine($meta['contract_signed_at'] ?? null),
         "SECTION:1. SHARTNOMA TOMONLARI",
-        "1.1. \"" . appValue($platform['name'] ?? '') . "\", keyingi o'rinlarda \"Platforma\" deb yuritiladi, direktor " . appPartyDirector($platform) . " (Ustav asosida) nomidan bir tomondan, va",
+        "1.1. " . appValue($platform['name'] ?? '') . ", keyingi o'rinlarda \"Platforma\" deb yuritiladi, direktor " . appPartyDirector($platform) . " (Ustav asosida) nomidan bir tomondan, va",
         "1.2. \"" . appValue($seller['name'] ?? '') . "\", keyingi o'rinlarda \"Ishlab chiqaruvchi\" deb yuritiladi, direktor " . appPartyDirector($seller) . " (Ustav asosida) nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
         "SECTION:2. SHARTNOMA PREDMETI",
         "2.1. Platforma Ishlab chiqaruvchining tovarlarini chakana savdo nuqtalariga (Mijozlarga) sotishda vositachilik va axborot-texnologik xizmatlarini ko'rsatadi.",
@@ -393,19 +388,12 @@ function appSellerRegisterContractLines($seller = null, $meta = []) {
 
 function appBuyerRegisterContractLines($buyer = null, $meta = []) {
     $buyer = $buyer ?: [];
-    $platform = $meta['platform'] ?? [
-        'name' => 'RoboTexnika MCHJ',
-        'director' => 'Mirzayev Sardor',
-        'inn' => '',
-        'phone' => '',
-        'bank_account' => '',
-        'mfo' => ''
-    ];
+    $platform = $meta['platform'] ?? appStaticPlatformParty();
     return [
         "TITLE:MAHSULOT YETKAZIB BERISH VA XIZMAT KO'RSATISH SHARTNOMASI No. " . appContractNumberValue($meta['contract_number'] ?? ''),
         appContractDateLine($meta['contract_signed_at'] ?? null),
         "SECTION:1. SHARTNOMA TOMONLARI",
-        "1.1. \"" . appValue($platform['name'] ?? '') . "\", keyingi o'rinlarda \"Platforma\" deb yuritiladi, direktor " . appPartyDirector($platform) . " nomidan, va",
+        "1.1. " . appValue($platform['name'] ?? '') . ", keyingi o'rinlarda \"Platforma\" deb yuritiladi, direktor " . appPartyDirector($platform) . " nomidan, va",
         "1.2. \"" . appValue($buyer['name'] ?? '') . "\", keyingi o'rinlarda \"Xaridor\" deb yuritiladi, direktor (yoki YATT) " . appPartyDirector($buyer) . " nomidan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
         "SECTION:2. SHARTNOMA PREDMETI",
         "2.1. Platforma Xaridorga tizimdagi Ishlab chiqaruvchilarning mahsulotlarini tanlash, buyurtma berish va yetkazib berishni tashkil qilish xizmatlarini ko'rsatadi.",
