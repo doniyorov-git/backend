@@ -324,8 +324,21 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return city ? `${line}    ${city}` : line;
         }
 
+        const STATIC_PLATFORM_PARTY = {
+            name: "\"ROBO TEXNIKA\" XK",
+            director: "Mirzayev Sardor",
+            address: "АНДИЖАНСКАЯ ОБЛАСТЬ, ГОРОД АНДИЖАН, Мирпўстин МФЙ, Майбоғча 13 тор кучаси, 3-уй",
+            inn: "310938488",
+            phone: "Kiritilmagan",
+            bankAccount: "20208000905719313001",
+            bankMfo: "00446",
+            role: "platform"
+        };
+
         function partyRequisitesLine(label, party) {
-            return `${label}: ${displayValue(party?.name)}; STIR: ${displayValue(party?.inn)}; Telefon: ${displayValue(party?.phone)}; H/r: ${displayValue(party?.bankAccount)}; MFO: ${displayValue(party?.bankMfo)}.`;
+            const address = displayValue(party?.address, "");
+            const addressPart = address ? `; Manzil: ${address}` : "";
+            return `${label}: ${displayValue(party?.name)}${addressPart}; STIR: ${displayValue(party?.inn)}; Telefon: ${displayValue(party?.phone)}; H/r: ${displayValue(party?.bankAccount)}; MFO: ${displayValue(party?.bankMfo)}.`;
         }
 
         function normalizeSessionUser(user) {
@@ -536,14 +549,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function platformPaymentParty() {
-            const party = platformParty();
-            return {
-                ...party,
-                name: party.name || "RoboTexnika MCHJ",
-                inn: party.inn && party.inn !== "Kiritilmagan" ? party.inn : "310938488",
-                bankAccount: party.bankAccount && party.bankAccount !== "Kiritilmagan" ? party.bankAccount : "20208000905719313001",
-                bankMfo: party.bankMfo && party.bankMfo !== "Kiritilmagan" ? party.bankMfo : "00446"
-            };
+            return { ...STATIC_PLATFORM_PARTY };
         }
 
         function adminCommissionPaymentHtml(order) {
@@ -561,6 +567,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 <h3 class="mb-3">Admin rekvizitlari (5% komissiya)</h3>
                 <div class="text-sm text-muted mb-4" style="background:white;padding:1rem;border-radius:8px;border:1px dashed #cbd5e1;">
                     <div style="margin-bottom:.5rem;">Tashkilot nomi:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(legalPartyName(platform.name, "MCHJ"))}</b></div>
+                    <div style="margin-bottom:.5rem;">Manzil:<br><b style="font-size:1rem;color:var(--text-dark);">${escapeHtml(platform.address)}</b></div>
                     <div style="margin-bottom:.5rem;">INN:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(platform.inn)}</b></div>
                     <div style="margin-bottom:.5rem;">H/r:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(platform.bankAccount)}</b></div>
                     <div style="margin-bottom:.5rem;">MFO:<br><b style="font-size:1.1rem;color:var(--text-dark);">${escapeHtml(platform.bankMfo)}</b></div>
@@ -1421,14 +1428,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function platformParty() {
-            return {
-                name: "RoboTexnika MCHJ",
-                director: "Mirzayev Sardor",
-                inn: "Kiritilmagan",
-                phone: "Kiritilmagan",
-                bankAccount: "Kiritilmagan",
-                bankMfo: "Kiritilmagan"
-            };
+            return { ...STATIC_PLATFORM_PARTY };
         }
 
         function listingBuyerParty() {
@@ -1469,7 +1469,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             `TITLE:HAMKORLIK VA XIZMAT KO'RSATISH SHARTNOMASI No. ${contractNumberValue(meta.contractNumber)}`,
             contractDateLine(meta.signedAt),
             "SECTION:1. SHARTNOMA TOMONLARI",
-            `1.1. "${displayValue(platform.name)}", keyingi o'rinlarda "Platforma" deb yuritiladi, direktor ${contractPartyDirector(platform)} (Ustav asosida) nomidan bir tomondan, va`,
+            `1.1. ${displayValue(platform.name)}, keyingi o'rinlarda "Platforma" deb yuritiladi, direktor ${contractPartyDirector(platform)} (Ustav asosida) nomidan bir tomondan, va`,
             `1.2. "${displayValue(seller.name)}", keyingi o'rinlarda "Ishlab chiqaruvchi" deb yuritiladi, direktor ${contractPartyDirector(seller)} (Ustav asosida) nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:`,
             "SECTION:2. SHARTNOMA PREDMETI",
             "2.1. Platforma Ishlab chiqaruvchining tovarlarini chakana savdo nuqtalariga (Mijozlarga) sotishda vositachilik va axborot-texnologik xizmatlarini ko'rsatadi.",
@@ -1521,7 +1521,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
             `TITLE:MAHSULOT YETKAZIB BERISH VA XIZMAT KO'RSATISH SHARTNOMASI No. ${contractNumberValue(meta.contractNumber)}`,
             contractDateLine(meta.signedAt),
             "SECTION:1. SHARTNOMA TOMONLARI",
-            `1.1. "${displayValue(platform.name)}", keyingi o'rinlarda "Platforma" deb yuritiladi, direktor ${contractPartyDirector(platform)} nomidan, va`,
+            `1.1. ${displayValue(platform.name)}, keyingi o'rinlarda "Platforma" deb yuritiladi, direktor ${contractPartyDirector(platform)} nomidan, va`,
             `1.2. "${displayValue(buyer.name)}", keyingi o'rinlarda "Xaridor" deb yuritiladi, direktor (yoki YATT) ${contractPartyDirector(buyer)} nomidan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:`,
             "SECTION:2. SHARTNOMA PREDMETI",
             "2.1. Platforma Xaridorga tizimdagi Ishlab chiqaruvchilarning mahsulotlarini tanlash, buyurtma berish va yetkazib berishni tashkil qilish xizmatlarini ko'rsatadi.",
