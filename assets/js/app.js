@@ -1431,29 +1431,6 @@ const STORAGE_KEY = "myDillerUzStateV2";
             };
         }
 
-        function listingBuyerParty() {
-            return {
-                name: "My-Diler.uz platformasi orqali buyurtma beruvchi Xaridor",
-                director: "Buyurtma vaqtida DBdan olinadi",
-                inn: "Buyurtma vaqtida DBdan olinadi",
-                phone: "Buyurtma vaqtida DBdan olinadi",
-                role: "buyer",
-                bankAccount: "Buyurtma vaqtida DBdan olinadi",
-                bankMfo: "Buyurtma vaqtida DBdan olinadi"
-            };
-        }
-
-        function productContractSummary(product = {}) {
-            const details = [];
-            if (product.name) details.push(`Mahsulot: ${product.name}`);
-            if (product.price) details.push(`Narxi: ${money(product.price)}`);
-            if (product.region) details.push(`Hudud: ${product.region}`);
-            if (product.model) details.push(`Savdo modeli: ${product.model === "prepayment" ? "oldindan to'lov" : "realizatsiya"}`);
-            if (product.prepayPercent) details.push(`Oldindan to'lov: ${formatPercent(product.prepayPercent)}%`);
-            if (product.realDays) details.push(`Realizatsiya muddati: ${product.realDays} kun`);
-            return details.length ? ` ${details.join("; ")}.` : "";
-        }
-
         function contractParagraphs(lines) {
             return lines.map(line => {
                 if (line.startsWith("TITLE:")) return `<h3>${escapeHtml(line.slice(6))}</h3>`;
@@ -1555,27 +1532,27 @@ const STORAGE_KEY = "myDillerUzStateV2";
         ];
         }
 
-        function sellerListingContractLines({ seller = currentUserParty(), buyer = listingBuyerParty(), product = {}, meta = {} } = {}) {
+        function sellerListingContractLines({ seller = currentUserParty(), platform = platformParty(), meta = {} } = {}) {
             return [
             `TITLE:MAHSULOT OLDI-SOTDI SHARTNOMASI No. ${contractNumberValue(meta.contractNumber)}`,
             contractDateLine(meta.signedAt, ""),
             "SECTION:1. SHARTNOMA TOMONLARI",
-            `1.1. "${displayValue(seller.name)}" (keyingi o'rinlarda - Sotuvchi), direktor ${contractPartyDirector(seller)} nomidan bir tomondan, va`,
-            `1.2. "${displayValue(buyer.name)}" (keyingi o'rinlarda - Xaridor), direktor ${contractPartyDirector(buyer)} nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:`,
+            `1.1. "${displayValue(platform.name)}" (keyingi o'rinlarda - Platforma), direktor ${contractPartyDirector(platform)} nomidan bir tomondan, va`,
+            `1.2. "${displayValue(seller.name)}" (keyingi o'rinlarda - Sotuvchi), direktor ${contractPartyDirector(seller)} nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:`,
             "SECTION:2. SHARTNOMA PREDMETI",
-            "2.1. Sotuvchi o'zi ishlab chiqargan mahsulotlarni Xaridorga mulk qilib topshirish, Xaridor esa mahsulotlarni qabul qilish va haqini to'lash majburiyatini oladi.",
-            `2.2. Mazkur shartnoma doirasidagi barcha buyurtmalar, tovarlar ro'yxati va ularning narxi "My-Diler.uz" elektron platformasi (keyingi o'rinlarda - Platforma) orqali rasmiylashtiriladi.${productContractSummary(product)}`,
+            "2.1. Sotuvchi o'zi ishlab chiqargan mahsulotlarni Platforma orqali realizatsiya qilish, Platforma esa mahsulotlar bo'yicha buyurtmalar, to'lovlar va yetkazib berish jarayonini elektron tarzda rasmiylashtirish majburiyatini oladi.",
+            "2.2. Mazkur shartnoma doirasidagi barcha buyurtmalar, tovarlar ro'yxati va ularning narxi \"My-Diler.uz\" elektron platformasi (keyingi o'rinlarda - Platforma) orqali rasmiylashtiriladi.",
             "SECTION:3. TO'LOV SHARTLARI",
             "3.1. Mahsulotlarning narxi Platformada buyurtma berilgan vaqtda belgilangan amaldagi preyskurant bo'yicha hisoblanadi.",
             "3.2. To'lov shartlari (oldindan to'lov, bo'lib to'lash yoki kechiktirib to'lash) va muddatlari Platformada belgilangan tartibda va miqdorda amalga oshiriladi.",
-            "3.3. Xaridor tomonidan to'lovlar Platformaning texnik imkoniyatlari va hisob-kitob tizimidan foydalangan holda amalga oshirilishi mumkin.",
+            "3.3. To'lovlar Platformaning texnik imkoniyatlari va hisob-kitob tizimidan foydalangan holda amalga oshirilishi mumkin.",
             "SECTION:4. YETKAZIB BERISH TARTIBI",
             "4.1. Mahsulotlarni yetkazib berish xizmati va shartlari Platforma tomonidan belgilangan logistika qoidalariga asosan amalga oshiriladi.",
             "4.2. Yetkazib berish muddati Platformadagi elektron buyurtma tasdiqlangan vaqtdan boshlab hisoblanadi.",
-            "4.3. Mahsulot Xaridor tomonidan qabul qilib olingan vaqtda elektron yuk xati (EHF yoki Platforma dalolatnomasi) tasdiqlangan paytdan boshlab mahsulotga bo'lgan mulk huquqi Xaridorga o'tadi.",
+            "4.3. Mahsulot qabul qilib olingan vaqtda elektron yuk xati (EHF yoki Platforma dalolatnomasi) tasdiqlangan paytdan boshlab mahsulot bo'yicha elektron ma'lumotlar rasmiy dalil hisoblanadi.",
             "SECTION:5. MAHSULOT SIFATI VA KAFOLATI",
             "5.1. Sotuvchi mahsulotning sifati O'zbekiston Respublikasi standartlariga va Platformada ko'rsatilgan tavsiflarga mos kelishiga kafolat beradi.",
-            "5.2. Yashirin nuqsonlar yoki yaroqsiz (brak) mahsulotlar aniqlangan taqdirda, Xaridor Platformaning da'volar bilan ishlash tartibiga muvofiq mahsulotni almashtirishni talab qilish huquqiga ega.",
+            "5.2. Yashirin nuqsonlar yoki yaroqsiz (brak) mahsulotlar aniqlangan taqdirda, da'volar Platformaning da'volar bilan ishlash tartibiga muvofiq ko'rib chiqiladi.",
             "SECTION:6. TOMONLARNING JAVOBGARLIGI",
             "6.1. Tomonlar majburiyatlarini bajarmagan taqdirda O'zbekiston Respublikasining amaldagi qonunchiligi va Platformaning ichki qoidalariga muvofiq javobgar bo'ladilar.",
             "6.2. Platforma tizimidagi texnik xatoliklar yoki logistikadagi uzilishlar uchun Sotuvchi javobgar hisoblanmaydi (agar ayb Sotuvchida bo'lmasa).",
@@ -1584,8 +1561,8 @@ const STORAGE_KEY = "myDillerUzStateV2";
             "7.2. Nizolar muzokaralar yo'li bilan, kelishuv bo'lmasa, iqtisodiy sudda ko'rib chiqiladi.",
             "7.3. Shartnoma tomonlar imzolagan paytdan boshlab 1 yil davomida amal qiladi.",
             "SECTION:8. TOMONLARNING REKVIZITLARI",
+            partyRequisitesLine("Platforma", platform),
             partyRequisitesLine("Sotuvchi", seller),
-            partyRequisitesLine("Xaridor", buyer)
         ];
         }
 
@@ -1637,8 +1614,21 @@ const STORAGE_KEY = "myDillerUzStateV2";
             return contractDocumentHtml(user.role === "buyer" ? buyerRegisterContractLines(user) : sellerRegisterContractLines(user));
         }
 
-        function sellerListingContractHtml(product = {}) {
-            return contractDocumentHtml(sellerListingContractLines({ seller: currentUserParty(), product }));
+        function sellerListingContractHtml() {
+            return contractDocumentHtml(sellerListingContractLines({ seller: currentUserParty() }));
+        }
+
+        async function sellerListingContractPreviewHtml() {
+            try {
+                const res = await apiFetch('api/contracts.php', 'POST', {
+                    action: 'preview',
+                    type: 'seller_listing',
+                    source: 'product_create_preview'
+                });
+                return res.data?.content || sellerListingContractHtml();
+            } catch (error) {
+                return sellerListingContractHtml();
+            }
         }
 
         function buyerOrderContractHtml(total = 0) {
@@ -2908,7 +2898,8 @@ const STORAGE_KEY = "myDillerUzStateV2";
 
             if (!STATE.editingProductId && !hasSignedContractType("seller_listing")) {
                 STATE.pendingProductFormData = formData;
-                modal("Mahsulot joylash shartnomasi", sellerListingContractHtml({ name, price, region, model, prepayPercent, realDays }), `
+                const contractHtml = await sellerListingContractPreviewHtml();
+                modal("Mahsulot joylash shartnomasi", contractHtml, `
                     <button class="btn btn-outline" onclick="closeModal()">Bekor qilish</button>
                     <button class="btn btn-primary" onclick="acceptSellerListingContract()">Roziman va saqlash</button>
                 `);

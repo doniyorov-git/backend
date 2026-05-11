@@ -212,7 +212,7 @@ function appPlatformParty(PDO $pdo) {
 
     return [
         'id' => $admin['id'] ?? 'platform',
-        'name' => 'RoboTexnika MCHJ',
+        'name' => !empty($admin['name']) && $admin['name'] !== 'Tizim Administratori' ? $admin['name'] : 'RoboTexnika MCHJ',
         'director' => 'Mirzayev Sardor',
         'inn' => $admin['inn'] ?? '',
         'phone' => $admin['phone'] ?? '',
@@ -221,49 +221,6 @@ function appPlatformParty(PDO $pdo) {
         'mfo' => $admin['mfo'] ?? '',
         'created_at' => ''
     ];
-}
-
-function appListingBuyerParty() {
-    return [
-        'id' => null,
-        'name' => 'My-Diler.uz platformasi orqali buyurtma beruvchi Xaridor',
-        'director' => 'Buyurtma vaqtida DBdan olinadi',
-        'inn' => 'Buyurtma vaqtida DBdan olinadi',
-        'phone' => 'Buyurtma vaqtida DBdan olinadi',
-        'role' => 'buyer',
-        'bank_account' => 'Buyurtma vaqtida DBdan olinadi',
-        'mfo' => 'Buyurtma vaqtida DBdan olinadi',
-        'created_at' => ''
-    ];
-}
-
-function appProductContractSummary($product = null) {
-    if (!$product) {
-        return '';
-    }
-
-    $details = [];
-    if (!empty($product['name'])) {
-        $details[] = 'Mahsulot: ' . $product['name'];
-    }
-    if (isset($product['price']) && $product['price'] !== '') {
-        $details[] = 'Narxi: ' . number_format((float) $product['price'], 0, '.', ' ') . ' UZS';
-    }
-    if (!empty($product['region'])) {
-        $details[] = 'Hudud: ' . $product['region'];
-    }
-    if (!empty($product['model'])) {
-        $details[] = 'Savdo modeli: ' . ($product['model'] === 'prepayment' ? "oldindan to'lov" : 'realizatsiya');
-    }
-    if (!empty($product['prepay_percent'])) {
-        $percent = number_format((float) $product['prepay_percent'], 2, '.', '');
-        $details[] = "Oldindan to'lov: " . rtrim(rtrim($percent, '0'), '.') . '%';
-    }
-    if (!empty($product['real_days'])) {
-        $details[] = 'Realizatsiya muddati: ' . (int) $product['real_days'] . ' kun';
-    }
-
-    return $details ? ' ' . implode('; ', $details) . '.' : '';
 }
 
 function appPartyRequisitesHtml($label, $party) {
@@ -439,29 +396,29 @@ function appBuyerRegisterContractLines($buyer = null, $meta = []) {
     ];
 }
 
-function appSellerListingSaleContractLines($seller = null, $buyer = null, $product = null, $meta = []) {
+function appSellerListingSaleContractLines($seller = null, $platform = null, $meta = []) {
     $seller = $seller ?: [];
-    $buyer = $buyer ?: appListingBuyerParty();
+    $platform = $platform ?: [];
     return [
         "TITLE:MAHSULOT OLDI-SOTDI SHARTNOMASI No. " . appContractNumberValue($meta['contract_number'] ?? ''),
         appContractDateLine($meta['contract_signed_at'] ?? null, ''),
         "SECTION:1. SHARTNOMA TOMONLARI",
-        "1.1. \"" . appValue($seller['name'] ?? '') . "\" (keyingi o'rinlarda - Sotuvchi), direktor " . appPartyDirector($seller) . " nomidan bir tomondan, va",
-        "1.2. \"" . appValue($buyer['name'] ?? '') . "\" (keyingi o'rinlarda - Xaridor), direktor " . appPartyDirector($buyer) . " nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
+        "1.1. \"" . appValue($platform['name'] ?? '') . "\" (keyingi o'rinlarda - Platforma), direktor " . appPartyDirector($platform) . " nomidan bir tomondan, va",
+        "1.2. \"" . appValue($seller['name'] ?? '') . "\" (keyingi o'rinlarda - Sotuvchi), direktor " . appPartyDirector($seller) . " nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:",
         "SECTION:2. SHARTNOMA PREDMETI",
-        "2.1. Sotuvchi o'zi ishlab chiqargan mahsulotlarni Xaridorga mulk qilib topshirish, Xaridor esa mahsulotlarni qabul qilish va haqini to'lash majburiyatini oladi.",
-        "2.2. Mazkur shartnoma doirasidagi barcha buyurtmalar, tovarlar ro'yxati va ularning narxi \"My-Diler.uz\" elektron platformasi (keyingi o'rinlarda - Platforma) orqali rasmiylashtiriladi." . appProductContractSummary($product),
+        "2.1. Sotuvchi o'zi ishlab chiqargan mahsulotlarni Platforma orqali realizatsiya qilish, Platforma esa mahsulotlar bo'yicha buyurtmalar, to'lovlar va yetkazib berish jarayonini elektron tarzda rasmiylashtirish majburiyatini oladi.",
+        "2.2. Mazkur shartnoma doirasidagi barcha buyurtmalar, tovarlar ro'yxati va ularning narxi \"My-Diler.uz\" elektron platformasi (keyingi o'rinlarda - Platforma) orqali rasmiylashtiriladi.",
         "SECTION:3. TO'LOV SHARTLARI",
         "3.1. Mahsulotlarning narxi Platformada buyurtma berilgan vaqtda belgilangan amaldagi preyskurant bo'yicha hisoblanadi.",
         "3.2. To'lov shartlari (oldindan to'lov, bo'lib to'lash yoki kechiktirib to'lash) va muddatlari Platformada belgilangan tartibda va miqdorda amalga oshiriladi.",
-        "3.3. Xaridor tomonidan to'lovlar Platformaning texnik imkoniyatlari va hisob-kitob tizimidan foydalangan holda amalga oshirilishi mumkin.",
+        "3.3. To'lovlar Platformaning texnik imkoniyatlari va hisob-kitob tizimidan foydalangan holda amalga oshirilishi mumkin.",
         "SECTION:4. YETKAZIB BERISH TARTIBI",
         "4.1. Mahsulotlarni yetkazib berish xizmati va shartlari Platforma tomonidan belgilangan logistika qoidalariga asosan amalga oshiriladi.",
         "4.2. Yetkazib berish muddati Platformadagi elektron buyurtma tasdiqlangan vaqtdan boshlab hisoblanadi.",
-        "4.3. Mahsulot Xaridor tomonidan qabul qilib olingan vaqtda elektron yuk xati (EHF yoki Platforma dalolatnomasi) tasdiqlangan paytdan boshlab mahsulotga bo'lgan mulk huquqi Xaridorga o'tadi.",
+        "4.3. Mahsulot qabul qilib olingan vaqtda elektron yuk xati (EHF yoki Platforma dalolatnomasi) tasdiqlangan paytdan boshlab mahsulot bo'yicha elektron ma'lumotlar rasmiy dalil hisoblanadi.",
         "SECTION:5. MAHSULOT SIFATI VA KAFOLATI",
         "5.1. Sotuvchi mahsulotning sifati O'zbekiston Respublikasi standartlariga va Platformada ko'rsatilgan tavsiflarga mos kelishiga kafolat beradi.",
-        "5.2. Yashirin nuqsonlar yoki yaroqsiz (brak) mahsulotlar aniqlangan taqdirda, Xaridor Platformaning da'volar bilan ishlash tartibiga muvofiq mahsulotni almashtirishni talab qilish huquqiga ega.",
+        "5.2. Yashirin nuqsonlar yoki yaroqsiz (brak) mahsulotlar aniqlangan taqdirda, da'volar Platformaning da'volar bilan ishlash tartibiga muvofiq ko'rib chiqiladi.",
         "SECTION:6. TOMONLARNING JAVOBGARLIGI",
         "6.1. Tomonlar majburiyatlarini bajarmagan taqdirda O'zbekiston Respublikasining amaldagi qonunchiligi va Platformaning ichki qoidalariga muvofiq javobgar bo'ladilar.",
         "6.2. Platforma tizimidagi texnik xatoliklar yoki logistikadagi uzilishlar uchun Sotuvchi javobgar hisoblanmaydi (agar ayb Sotuvchida bo'lmasa).",
@@ -470,8 +427,8 @@ function appSellerListingSaleContractLines($seller = null, $buyer = null, $produ
         "7.2. Nizolar muzokaralar yo'li bilan, kelishuv bo'lmasa, iqtisodiy sudda ko'rib chiqiladi.",
         "7.3. Shartnoma tomonlar imzolagan paytdan boshlab 1 yil davomida amal qiladi.",
         "SECTION:8. TOMONLARNING REKVIZITLARI",
+        appPartyRequisitesLine("Platforma", $platform),
         appPartyRequisitesLine("Sotuvchi", $seller),
-        appPartyRequisitesLine("Xaridor", $buyer)
     ];
 }
 
@@ -529,13 +486,12 @@ function appBuyerOrderContractLines($seller = null, $buyer = null, $order = null
 
 function appSellerListingContractHtml(PDO $pdo, $sellerId, $context = []) {
     $seller = appFetchUserParty($pdo, $sellerId);
-    $buyer = appListingBuyerParty();
-    $product = appFetchProduct($pdo, $context['product_id'] ?? null);
+    $platform = appPlatformParty($pdo);
     return [
         'title' => 'Mahsulot oldi-sotdi shartnomasi',
-        'content' => appContractDocumentHtml(appSellerListingSaleContractLines($seller, $buyer, $product, $context)),
+        'content' => appContractDocumentHtml(appSellerListingSaleContractLines($seller, $platform, $context)),
         'signer' => $seller,
-        'counterparty' => $buyer
+        'counterparty' => $platform
     ];
 }
 
