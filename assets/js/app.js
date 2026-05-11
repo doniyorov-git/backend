@@ -161,6 +161,9 @@ const STORAGE_KEY = "myDillerUzStateV2";
                     sellerId: p.seller_id,
                     sellerName: p.seller_name,
                     sellerPhone: p.seller_phone,
+                    sellerInn: p.seller_inn,
+                    sellerBankAccount: p.seller_bank_account,
+                    sellerMfo: p.seller_mfo,
                     mxikCode: p.mxik_code || p.mxikCode || "",
                     prepayPercent: parseNumberOrDefault(p.prepay_percent ?? p.prepayPercent, p.model === "prepayment" ? 30 : 0),
                     realDays: parseNumberOrDefault(p.real_days ?? p.realDays, 30),
@@ -498,7 +501,15 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 if (order.buyerId === id) return { id, name: order.buyer_name || order.buyerName || "Diler", role: "buyer", inn: order.buyer_inn, phone: order.buyer_phone, bankAccount: order.buyer_bank_account, bankMfo: order.buyer_mfo };
             }
             const product = DB.products.find(item => item.sellerId === id);
-            if (product) return { id, name: product.sellerName || product.seller_name || "Sotuvchi", role: "seller", phone: product.sellerPhone || product.seller_phone };
+            if (product) return {
+                id,
+                name: product.sellerName || product.seller_name || "Sotuvchi",
+                role: "seller",
+                inn: product.sellerInn || product.seller_inn,
+                phone: product.sellerPhone || product.seller_phone,
+                bankAccount: product.sellerBankAccount || product.seller_bank_account,
+                bankMfo: product.sellerMfo || product.seller_mfo
+            };
             return { id, name: "Noma'lum", role: "", status: "" };
         }
 
@@ -1420,6 +1431,29 @@ const STORAGE_KEY = "myDillerUzStateV2";
             };
         }
 
+        function listingBuyerParty() {
+            return {
+                name: "My-Diler.uz platformasi orqali buyurtma beruvchi Xaridor",
+                director: "Buyurtma vaqtida DBdan olinadi",
+                inn: "Buyurtma vaqtida DBdan olinadi",
+                phone: "Buyurtma vaqtida DBdan olinadi",
+                role: "buyer",
+                bankAccount: "Buyurtma vaqtida DBdan olinadi",
+                bankMfo: "Buyurtma vaqtida DBdan olinadi"
+            };
+        }
+
+        function productContractSummary(product = {}) {
+            const details = [];
+            if (product.name) details.push(`Mahsulot: ${product.name}`);
+            if (product.price) details.push(`Narxi: ${money(product.price)}`);
+            if (product.region) details.push(`Hudud: ${product.region}`);
+            if (product.model) details.push(`Savdo modeli: ${product.model === "prepayment" ? "oldindan to'lov" : "realizatsiya"}`);
+            if (product.prepayPercent) details.push(`Oldindan to'lov: ${formatPercent(product.prepayPercent)}%`);
+            if (product.realDays) details.push(`Realizatsiya muddati: ${product.realDays} kun`);
+            return details.length ? ` ${details.join("; ")}.` : "";
+        }
+
         function contractParagraphs(lines) {
             return lines.map(line => {
                 if (line.startsWith("TITLE:")) return `<h3>${escapeHtml(line.slice(6))}</h3>`;
@@ -1521,6 +1555,40 @@ const STORAGE_KEY = "myDillerUzStateV2";
         ];
         }
 
+        function sellerListingContractLines({ seller = currentUserParty(), buyer = listingBuyerParty(), product = {}, meta = {} } = {}) {
+            return [
+            `TITLE:MAHSULOT OLDI-SOTDI SHARTNOMASI No. ${contractNumberValue(meta.contractNumber)}`,
+            contractDateLine(meta.signedAt, ""),
+            "SECTION:1. SHARTNOMA TOMONLARI",
+            `1.1. "${displayValue(seller.name)}" (keyingi o'rinlarda - Sotuvchi), direktor ${contractPartyDirector(seller)} nomidan bir tomondan, va`,
+            `1.2. "${displayValue(buyer.name)}" (keyingi o'rinlarda - Xaridor), direktor ${contractPartyDirector(buyer)} nomidan ikkinchi tomondan, mazkur shartnomani quyidagilar to'g'risida tuzdilar:`,
+            "SECTION:2. SHARTNOMA PREDMETI",
+            "2.1. Sotuvchi o'zi ishlab chiqargan mahsulotlarni Xaridorga mulk qilib topshirish, Xaridor esa mahsulotlarni qabul qilish va haqini to'lash majburiyatini oladi.",
+            `2.2. Mazkur shartnoma doirasidagi barcha buyurtmalar, tovarlar ro'yxati va ularning narxi "My-Diler.uz" elektron platformasi (keyingi o'rinlarda - Platforma) orqali rasmiylashtiriladi.${productContractSummary(product)}`,
+            "SECTION:3. TO'LOV SHARTLARI",
+            "3.1. Mahsulotlarning narxi Platformada buyurtma berilgan vaqtda belgilangan amaldagi preyskurant bo'yicha hisoblanadi.",
+            "3.2. To'lov shartlari (oldindan to'lov, bo'lib to'lash yoki kechiktirib to'lash) va muddatlari Platformada belgilangan tartibda va miqdorda amalga oshiriladi.",
+            "3.3. Xaridor tomonidan to'lovlar Platformaning texnik imkoniyatlari va hisob-kitob tizimidan foydalangan holda amalga oshirilishi mumkin.",
+            "SECTION:4. YETKAZIB BERISH TARTIBI",
+            "4.1. Mahsulotlarni yetkazib berish xizmati va shartlari Platforma tomonidan belgilangan logistika qoidalariga asosan amalga oshiriladi.",
+            "4.2. Yetkazib berish muddati Platformadagi elektron buyurtma tasdiqlangan vaqtdan boshlab hisoblanadi.",
+            "4.3. Mahsulot Xaridor tomonidan qabul qilib olingan vaqtda elektron yuk xati (EHF yoki Platforma dalolatnomasi) tasdiqlangan paytdan boshlab mahsulotga bo'lgan mulk huquqi Xaridorga o'tadi.",
+            "SECTION:5. MAHSULOT SIFATI VA KAFOLATI",
+            "5.1. Sotuvchi mahsulotning sifati O'zbekiston Respublikasi standartlariga va Platformada ko'rsatilgan tavsiflarga mos kelishiga kafolat beradi.",
+            "5.2. Yashirin nuqsonlar yoki yaroqsiz (brak) mahsulotlar aniqlangan taqdirda, Xaridor Platformaning da'volar bilan ishlash tartibiga muvofiq mahsulotni almashtirishni talab qilish huquqiga ega.",
+            "SECTION:6. TOMONLARNING JAVOBGARLIGI",
+            "6.1. Tomonlar majburiyatlarini bajarmagan taqdirda O'zbekiston Respublikasining amaldagi qonunchiligi va Platformaning ichki qoidalariga muvofiq javobgar bo'ladilar.",
+            "6.2. Platforma tizimidagi texnik xatoliklar yoki logistikadagi uzilishlar uchun Sotuvchi javobgar hisoblanmaydi (agar ayb Sotuvchida bo'lmasa).",
+            "SECTION:7. YAKUNIY QOIDALAR",
+            "7.1. Platformadagi elektron ma'lumotlar, buyurtmalar tarixi va hisob-kitoblar shartnomaning ajralmas qismi va rasmiy dalil hisoblanadi.",
+            "7.2. Nizolar muzokaralar yo'li bilan, kelishuv bo'lmasa, iqtisodiy sudda ko'rib chiqiladi.",
+            "7.3. Shartnoma tomonlar imzolagan paytdan boshlab 1 yil davomida amal qiladi.",
+            "SECTION:8. TOMONLARNING REKVIZITLARI",
+            partyRequisitesLine("Sotuvchi", seller),
+            partyRequisitesLine("Xaridor", buyer)
+        ];
+        }
+
         function buyerOrderContractLines({ buyer = currentUserParty(), seller = {}, total = 0, items = [], meta = {} } = {}) {
             const itemNames = items.map(item => {
                 const product = productById(item.prodId || item.product_id) || {};
@@ -1570,7 +1638,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         }
 
         function sellerListingContractHtml(product = {}) {
-            return contractDocumentHtml(sellerRegisterContractLines(currentUserParty(), { product }));
+            return contractDocumentHtml(sellerListingContractLines({ seller: currentUserParty(), product }));
         }
 
         function buyerOrderContractHtml(total = 0) {
@@ -1581,7 +1649,10 @@ const STORAGE_KEY = "myDillerUzStateV2";
                 return [product.sellerId, {
                     ...seller,
                     name: product.sellerName || product.seller_name || seller.name,
-                    phone: product.sellerPhone || product.seller_phone || seller.phone
+                    inn: product.sellerInn || product.seller_inn || seller.inn,
+                    phone: product.sellerPhone || product.seller_phone || seller.phone,
+                    bankAccount: product.sellerBankAccount || product.seller_bank_account || seller.bankAccount,
+                    bankMfo: product.sellerMfo || product.seller_mfo || seller.bankMfo
                 }];
             }).filter(Boolean)).values()];
             const seller = sellers.length === 1
@@ -2468,7 +2539,7 @@ const STORAGE_KEY = "myDillerUzStateV2";
         function contractTypeLabel(type) {
             return {
                 platform_terms: "Platforma shartnomasi",
-                seller_listing: "Sotuvchi mahsulot shartnomasi",
+                seller_listing: "Mahsulot oldi-sotdi shartnomasi",
                 buyer_order: "Xaridor buyurtma shartnomasi"
             }[type] || type || "Shartnoma";
         }

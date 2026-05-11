@@ -4,7 +4,8 @@ requireRole(['buyer']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $stmt = $pdo->query("
-        SELECT p.*, s.name as seller_name, s.phone as seller_phone 
+        SELECT p.*, s.name as seller_name, s.phone as seller_phone, s.inn as seller_inn,
+               s.bank_account as seller_bank_account, s.mfo as seller_mfo
         FROM products p
         JOIN users s ON p.seller_id = s.id
         WHERE p.status IN ('approved', 'active')
